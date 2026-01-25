@@ -19,3 +19,23 @@ export interface CreateBackgroundInput {
   width?: number | null
   height?: number | null
 }
+
+export interface Pack {
+  id: string
+  background_id: string
+  user_id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Item {
+  id: string
+  pack_id: string
+  user_id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  created_at: string
+}

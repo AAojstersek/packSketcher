@@ -4,6 +4,7 @@ import { TemplateGrid } from './TemplateGrid'
 import type { Background } from '@/types'
 import Image from 'next/image'
 import { headers } from 'next/headers'
+import Link from 'next/link'
 
 const LOCAL_TEMPLATES = [
   {
@@ -33,7 +34,7 @@ function formatDate(dateString: string): string {
 }
 
 export default async function DashboardPage() {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
@@ -97,9 +98,10 @@ export default async function DashboardPage() {
           {backgrounds && backgrounds.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {backgrounds.map((bg: Background) => (
-                <div
+                <Link
                   key={bg.id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden"
+                  href={`/planner/${bg.id}`}
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow block"
                 >
                   {bg.image_url && (
                     <div className="relative h-48 bg-gray-100">
@@ -122,7 +124,7 @@ export default async function DashboardPage() {
                       {formatDate(bg.created_at)}
                     </p>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           ) : (

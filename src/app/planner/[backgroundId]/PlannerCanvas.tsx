@@ -1,16 +1,21 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import type { Item } from '@/types'
 
 interface PlannerCanvasProps {
   imageUrl: string
   name: string
+  packId: string
+  items: Item[]
 }
 
-export function PlannerCanvas({ imageUrl, name }: PlannerCanvasProps) {
+export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasProps) {
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const imageNaturalWidthRef = useRef<number>(0)
+  const imageNaturalHeightRef = useRef<number>(0)
   const [imageLoaded, setImageLoaded] = useState(false)
 
   const drawOverlay = () => {
@@ -24,20 +29,31 @@ export function PlannerCanvas({ imageUrl, name }: PlannerCanvasProps) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw test rectangle: centered, 40% width, 20% height
-    const rectWidth = canvas.width * 0.4
-    const rectHeight = canvas.height * 0.2
-    const rectX = (canvas.width - rectWidth) / 2
-    const rectY = (canvas.height - rectHeight) / 2
+    // Compute scale factors (items are stored in original image pixel coordinates)
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    
+    if (imageNaturalWidth > 0 && imageNaturalHeight > 0) {
+      const scaleX = canvas.width / imageNaturalWidth
+      const scaleY = canvas.height / imageNaturalHeight
 
-    // Fill with semi-transparent color
-    ctx.fillStyle = 'rgba(59, 130, 246, 0.3)'
-    ctx.fillRect(rectX, rectY, rectWidth, rectHeight)
+      // Draw items using scaled coordinates
+      items.forEach((item) => {
+        const itemX = item.x * scaleX
+        const itemY = item.y * scaleY
+        const itemWidth = item.width * scaleX
+        const itemHeight = item.height * scaleY
 
-    // Stroke border
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'
-    ctx.lineWidth = 2
-    ctx.strokeRect(rectX, rectY, rectWidth, rectHeight)
+        // Fill with semi-transparent color
+        ctx.fillStyle = 'rgba(0, 200, 0, 0.25)'
+        ctx.fillRect(itemX, itemY, itemWidth, itemHeight)
+
+        // Stroke border
+        ctx.strokeStyle = 'rgba(0, 200, 0, 0.8)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
+      })
+    }
   }
 
   const updateCanvasSize = () => {
@@ -66,6 +82,9 @@ export function PlannerCanvas({ imageUrl, name }: PlannerCanvasProps) {
     if (!img) return
 
     const handleImageLoad = () => {
+      // Store original image dimensions
+      imageNaturalWidthRef.current = img.naturalWidth
+      imageNaturalHeightRef.current = img.naturalHeight
       setImageLoaded(true)
       updateCanvasSize()
     }
@@ -90,7 +109,7 @@ export function PlannerCanvas({ imageUrl, name }: PlannerCanvasProps) {
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded])
+  }, [imageLoaded, items])
 
   return (
     <div ref={containerRef} className="relative w-full bg-white rounded-lg shadow-lg overflow-hidden">
