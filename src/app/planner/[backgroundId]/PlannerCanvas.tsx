@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { Item } from '@/types'
 import { supabase } from '@/lib/supabase/browser'
 
+// Survives remounts (Strict Mode / fast refresh) so we don't overwrite localItems after resize/drag.
+let lastSyncedPackId: string | null = null
+
 interface PlannerCanvasProps {
   imageUrl: string
   name: string
@@ -32,10 +35,29 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const draggedItemCurrentRef = useRef<Item | null>(null)
   const selectedItemIdRef = useRef<string | null>(null)
   const localItemsRef = useRef<Item[]>(localItems)
+  const [isResizing, setIsResizing] = useState(false)
+  const [resizeHandle, setResizeHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
+  const resizeStartRef = useRef<{
+    startX: number
+    startY: number
+    origX: number
+    origY: number
+    origW: number
+    origH: number
+  } | null>(null)
+  const resizeItemIdRef = useRef<string | null>(null)
+  const resizedItemCurrentRef = useRef<Item | null>(null)
+  const resizeHandleRef = useRef<'tl' | 'tr' | 'bl' | 'br' | null>(null)
+  const didResizeRef = useRef(false)
+  const [hoveredHandle, setHoveredHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
+
+  const HANDLE_SIZE = 8
+  const MIN_ITEM_SIZE = 40
 
   dragItemIdRef.current = dragItemId
   selectedItemIdRef.current = selectedItemId
   localItemsRef.current = localItems
+  resizeHandleRef.current = resizeHandle
 
   function canvasToOriginal(
     canvas: HTMLCanvasElement,
@@ -78,6 +100,34 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     return null
   }
 
+  function getHandleAtCanvasPoint(
+    canvas: HTMLCanvasElement,
+    canvasX: number,
+    canvasY: number,
+    item: Item
+  ): 'tl' | 'tr' | 'bl' | 'br' | null {
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return null
+    const scaleX = canvas.width / imageNaturalWidth
+    const scaleY = canvas.height / imageNaturalHeight
+    const itemX = item.x * scaleX
+    const itemY = item.y * scaleY
+    const itemW = item.width * scaleX
+    const itemH = item.height * scaleY
+    const s = HANDLE_SIZE
+    const corners: { handle: 'tl' | 'tr' | 'bl' | 'br'; cx: number; cy: number }[] = [
+      { handle: 'tl', cx: itemX, cy: itemY },
+      { handle: 'tr', cx: itemX + itemW - s, cy: itemY },
+      { handle: 'br', cx: itemX + itemW - s, cy: itemY + itemH - s },
+      { handle: 'bl', cx: itemX, cy: itemY + itemH - s },
+    ]
+    for (const { handle, cx, cy } of corners) {
+      if (canvasX >= cx && canvasX <= cx + s && canvasY >= cy && canvasY <= cy + s) return handle
+    }
+    return null
+  }
+
   const drawOverlay = (itemsToDraw: Item[] = localItems) => {
     const canvas = canvasRef.current
     const img = imageRef.current
@@ -98,7 +148,6 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       const scaleY = canvas.height / imageNaturalHeight
 
       // Draw items using scaled coordinates
-      const handleSize = 6
       itemsToDraw.forEach((item) => {
         const itemX = item.x * scaleX
         const itemY = item.y * scaleY
@@ -122,20 +171,20 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
         }
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
 
-        // Corner handles (visual only) when selected
+        // Corner handles when selected
         if (item.id === selectedItemId) {
           ctx.fillStyle = 'rgba(255, 0, 0, 0.95)'
           ctx.strokeStyle = 'rgba(255, 0, 0, 0.95)'
           ctx.lineWidth = 1
           const corners = [
             [itemX, itemY],
-            [itemX + itemWidth - handleSize, itemY],
-            [itemX + itemWidth - handleSize, itemY + itemHeight - handleSize],
-            [itemX, itemY + itemHeight - handleSize],
+            [itemX + itemWidth - HANDLE_SIZE, itemY],
+            [itemX + itemWidth - HANDLE_SIZE, itemY + itemHeight - HANDLE_SIZE],
+            [itemX, itemY + itemHeight - HANDLE_SIZE],
           ]
           corners.forEach(([cx, cy]) => {
-            ctx.fillRect(cx, cy, handleSize, handleSize)
-            ctx.strokeRect(cx, cy, handleSize, handleSize)
+            ctx.fillRect(cx, cy, HANDLE_SIZE, HANDLE_SIZE)
+            ctx.strokeRect(cx, cy, HANDLE_SIZE, HANDLE_SIZE)
           })
         }
       })
@@ -195,7 +244,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, isDragging])
+  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, isDragging, isResizing])
 
   // Fetch and cache user ID on mount
   useEffect(() => {
@@ -208,10 +257,13 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     fetchUserId()
   }, [])
 
-  // Sync localItems with props.items
+  // Sync localItems from props.items only when packId actually changes (e.g. navigating to another pack).
+  // lastSyncedPackId is module-level so it survives remounts; we don't overwrite local edits after resize/drag.
   useEffect(() => {
+    if (lastSyncedPackId === packId) return
+    lastSyncedPackId = packId
     setLocalItems(items)
-  }, [items])
+  }, [packId, items])
 
   // Delete selected item on Delete/Backspace
   useEffect(() => {
@@ -246,6 +298,26 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     if (hitId == null || hitId !== selectedItemId) return
     const item = localItems.find((i) => i.id === hitId)
     if (!item) return
+    const handle = getHandleAtCanvasPoint(canvas, canvasX, canvasY, item)
+    if (handle != null) {
+      e.preventDefault()
+      e.stopPropagation()
+      const orig = canvasToOriginal(canvas, canvasX, canvasY)
+      resizeStartRef.current = {
+        startX: orig.x,
+        startY: orig.y,
+        origX: item.x,
+        origY: item.y,
+        origW: item.width,
+        origH: item.height,
+      }
+      resizeItemIdRef.current = hitId
+      resizedItemCurrentRef.current = { ...item }
+      didResizeRef.current = true
+      setIsResizing(true)
+      setResizeHandle(handle)
+      return
+    }
     const orig = canvasToOriginal(canvas, canvasX, canvasY)
     dragStartPositionRef.current = { x: item.x, y: item.y }
     didDragRef.current = false
@@ -285,6 +357,48 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     }
   }
 
+  const handleResizeEnd = useRef<() => void>(() => {})
+  handleResizeEnd.current = async () => {
+    const id = resizeItemIdRef.current
+    if (!id) return
+    const start = resizeStartRef.current
+    const item =
+      resizedItemCurrentRef.current ?? localItemsRef.current.find((i) => i.id === id)
+    if (!item) {
+      setIsResizing(false)
+      setResizeHandle(null)
+      resizeItemIdRef.current = null
+      resizeHandleRef.current = null
+      return
+    }
+    const x = Math.round(item.x)
+    const y = Math.round(item.y)
+    const width = Math.round(item.width)
+    const height = Math.round(item.height)
+    setLocalItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, x, y, width, height } : it))
+    )
+    setIsResizing(false)
+    setResizeHandle(null)
+    resizeItemIdRef.current = null
+    resizeHandleRef.current = null
+    resizedItemCurrentRef.current = null
+    resizeStartRef.current = null
+    const { error: updateError } = await supabase
+      .from('items')
+      .update({ x, y, width, height })
+      .eq('id', id)
+    if (updateError && start) {
+      setLocalItems((prev) =>
+        prev.map((it) =>
+          it.id === id ? { ...it, x: start.origX, y: start.origY, width: start.origW, height: start.origH } : it
+        )
+      )
+      setError('Resize save failed: ' + (updateError.message ?? 'unknown'))
+      setTimeout(() => setError(null), 5000)
+    }
+  }
+
   useEffect(() => {
     if (!isDragging) return
     const onMouseUp = () => handleDragEnd.current()
@@ -292,18 +406,105 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     return () => window.removeEventListener('mouseup', onMouseUp)
   }, [isDragging])
 
+  useEffect(() => {
+    if (!isResizing) return
+    const onResizeMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const canvasX = e.clientX - rect.left
+      const canvasY = e.clientY - rect.top
+      const imageNaturalWidth = imageNaturalWidthRef.current
+      const imageNaturalHeight = imageNaturalHeightRef.current
+      const id = resizeItemIdRef.current
+      const handle = resizeHandleRef.current
+      if (!id || !handle || imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
+      const items = localItemsRef.current
+      const item = items.find((i) => i.id === id)
+      const start = resizeStartRef.current
+      if (!item || !start) return
+      const scaleX = imageNaturalWidth / canvas.width
+      const scaleY = imageNaturalHeight / canvas.height
+      const orig = { x: canvasX * scaleX, y: canvasY * scaleY }
+      const mx = orig.x
+      const my = orig.y
+      const imgW = imageNaturalWidth
+      const imgH = imageNaturalHeight
+      const minS = MIN_ITEM_SIZE
+      let newX: number
+      let newY: number
+      let newW: number
+      let newH: number
+      switch (handle) {
+        case 'tl':
+          newX = mx
+          newY = my
+          newW = start.origX + start.origW - mx
+          newH = start.origY + start.origH - my
+          break
+        case 'tr':
+          newX = start.origX
+          newY = my
+          newW = mx - start.origX
+          newH = start.origY + start.origH - my
+          break
+        case 'br':
+          newX = start.origX
+          newY = start.origY
+          newW = mx - start.origX
+          newH = my - start.origY
+          break
+        case 'bl':
+          newX = mx
+          newY = start.origY
+          newW = start.origX + start.origW - mx
+          newH = my - start.origY
+          break
+      }
+      newW = Math.max(minS, Math.min(newW, imgW - newX))
+      newH = Math.max(minS, Math.min(newH, imgH - newY))
+      if (handle === 'tl') {
+        newX = start.origX + start.origW - newW
+        newY = start.origY + start.origH - newH
+      } else if (handle === 'tr') {
+        newY = start.origY + start.origH - newH
+      } else if (handle === 'bl') {
+        newX = start.origX + start.origW - newW
+      }
+      newX = Math.max(0, Math.min(newX, imgW - newW))
+      newY = Math.max(0, Math.min(newY, imgH - newH))
+      newX = Math.round(newX)
+      newY = Math.round(newY)
+      newW = Math.round(newW)
+      newH = Math.round(newH)
+      const updated = { ...item, x: newX, y: newY, width: newW, height: newH }
+      resizedItemCurrentRef.current = updated
+      setLocalItems((prev) => prev.map((it) => (it.id === id ? updated : it)))
+      drawOverlay(
+        localItemsRef.current.map((it) => (it.id === id ? updated : it))
+      )
+    }
+    const onResizeEnd = () => handleResizeEnd.current()
+    window.addEventListener('mousemove', onResizeMove)
+    window.addEventListener('mouseup', onResizeEnd)
+    return () => {
+      window.removeEventListener('mousemove', onResizeMove)
+      window.removeEventListener('mouseup', onResizeEnd)
+    }
+  }, [isResizing])
+
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
     const canvasX = e.clientX - rect.left
     const canvasY = e.clientY - rect.top
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
 
     if (isDragging && dragItemId) {
       const item = localItems.find((i) => i.id === dragItemId)
       if (!item) return
-      const imageNaturalWidth = imageNaturalWidthRef.current
-      const imageNaturalHeight = imageNaturalHeightRef.current
       if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
       const orig = canvasToOriginal(canvas, canvasX, canvasY)
       let newX = Math.round(orig.x - dragOffset.dx)
@@ -322,12 +523,21 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       return
     }
 
-    const id = getItemAtCanvasPoint(canvas, canvasX, canvasY, localItems)
-    setHoveredItemId(id ?? null)
+    const hitId = getItemAtCanvasPoint(canvas, canvasX, canvasY, localItems)
+    setHoveredItemId(hitId ?? null)
+    if (hitId && hitId === selectedItemId) {
+      const item = localItems.find((i) => i.id === hitId)
+      const handle = item ? getHandleAtCanvasPoint(canvas, canvasX, canvasY, item) : null
+      setHoveredHandle(handle)
+    } else {
+      setHoveredHandle(null)
+    }
   }
 
   const handleCanvasMouseUp = () => {
-    if (isDragging && dragItemId) {
+    if (isResizing) {
+      handleResizeEnd.current()
+    } else if (isDragging && dragItemId) {
       handleDragEnd.current()
     }
   }
@@ -335,6 +545,10 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (didDragRef.current) {
       didDragRef.current = false
+      return
+    }
+    if (didResizeRef.current) {
+      didResizeRef.current = false
       return
     }
     const canvas = canvasRef.current
@@ -449,16 +663,27 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
         style={{
           cursor: isDragging
             ? 'grabbing'
-            : hoveredItemId && hoveredItemId === selectedItemId
-              ? 'grab'
-              : hoveredItemId
-                ? 'pointer'
-                : 'crosshair',
+            : isResizing
+              ? resizeHandle === 'tl' || resizeHandle === 'br'
+                ? 'nwse-resize'
+                : 'nesw-resize'
+              : hoveredHandle
+                ? hoveredHandle === 'tl' || hoveredHandle === 'br'
+                  ? 'nwse-resize'
+                  : 'nesw-resize'
+                : hoveredItemId && hoveredItemId === selectedItemId
+                  ? 'grab'
+                  : hoveredItemId
+                    ? 'pointer'
+                    : 'crosshair',
         }}
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={() => setHoveredItemId(null)}
+        onMouseLeave={() => {
+          setHoveredItemId(null)
+          setHoveredHandle(null)
+        }}
         onClick={handleCanvasClick}
       />
 
