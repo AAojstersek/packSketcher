@@ -50,6 +50,22 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const resizeHandleRef = useRef<'tl' | 'tr' | 'bl' | 'br' | null>(null)
   const didResizeRef = useRef(false)
   const [hoveredHandle, setHoveredHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
+  const [scale, setScale] = useState(1)
+  const [offsetX, setOffsetX] = useState(0)
+  const [offsetY, setOffsetY] = useState(0)
+  const scaleRef = useRef(1)
+  const offsetXRef = useRef(0)
+  const offsetYRef = useRef(0)
+  const [isPanning, setIsPanning] = useState(false)
+  const [spacePressed, setSpacePressed] = useState(false)
+  const spacePressedRef = useRef(false)
+  const panStartRef = useRef({ x: 0, y: 0 })
+  const panStartOffsetRef = useRef({ x: 0, y: 0 })
+  const [isEditMode, setIsEditMode] = useState(false)
+  const isEditModeRef = useRef(false)
+
+  const MIN_ZOOM = 0.25
+  const MAX_ZOOM = 2.5
 
   const HANDLE_SIZE = 8
   const MIN_ITEM_SIZE = 40
@@ -58,6 +74,34 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   selectedItemIdRef.current = selectedItemId
   localItemsRef.current = localItems
   resizeHandleRef.current = resizeHandle
+  scaleRef.current = scale
+  offsetXRef.current = offsetX
+  offsetYRef.current = offsetY
+  isEditModeRef.current = isEditMode
+
+  function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
+    const el = containerRef.current
+    if (!el) return { x: 0, y: 0 }
+    const rect = el.getBoundingClientRect()
+    const mouseX = clientX - rect.left
+    const mouseY = clientY - rect.top
+    return {
+      x: (mouseX - offsetX) / scale,
+      y: (mouseY - offsetY) / scale,
+    }
+  }
+
+  function clientToWorldFromRefs(clientX: number, clientY: number): { x: number; y: number } {
+    const el = containerRef.current
+    if (!el) return { x: 0, y: 0 }
+    const rect = el.getBoundingClientRect()
+    const mouseX = clientX - rect.left
+    const mouseY = clientY - rect.top
+    return {
+      x: (mouseX - offsetXRef.current) / scaleRef.current,
+      y: (mouseY - offsetYRef.current) / scaleRef.current,
+    }
+  }
 
   function canvasToOriginal(
     canvas: HTMLCanvasElement,
@@ -244,7 +288,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, isDragging, isResizing])
+  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, isDragging, isResizing, scale, offsetX, offsetY])
 
   // Fetch and cache user ID on mount
   useEffect(() => {
@@ -268,6 +312,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   // Delete selected item on Delete/Backspace
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (!isEditModeRef.current) return
       const id = selectedItemIdRef.current
       if (id == null) return
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
@@ -288,21 +333,82 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault()
+        spacePressedRef.current = true
+        setSpacePressed(true)
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        spacePressedRef.current = false
+        setSpacePressed(false)
+        setIsPanning(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
+  const handleWheelRef = useRef((_e: WheelEvent) => {})
+  handleWheelRef.current = (e: WheelEvent) => {
+    const el = containerRef.current
+    if (!el) return
+    e.preventDefault()
+    if (e.ctrlKey) {
+      const rect = el.getBoundingClientRect()
+      const scaleVal = scaleRef.current
+      const offsetXVal = offsetXRef.current
+      const offsetYVal = offsetYRef.current
+      const worldX = (e.clientX - rect.left - offsetXVal) / scaleVal
+      const worldY = (e.clientY - rect.top - offsetYVal) / scaleVal
+      const newScale = Math.max(
+        MIN_ZOOM,
+        Math.min(MAX_ZOOM, scaleVal * (e.deltaY < 0 ? 1.1 : 0.9))
+      )
+      setScale(newScale)
+      setOffsetX(e.clientX - rect.left - worldX * newScale)
+      setOffsetY(e.clientY - rect.top - worldY * newScale)
+    } else {
+      setOffsetX(offsetXRef.current - e.deltaX)
+      setOffsetY(offsetYRef.current - e.deltaY)
+    }
+  }
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => handleWheelRef.current(e)
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas || !imageLoaded) return
-    const rect = canvas.getBoundingClientRect()
-    const canvasX = e.clientX - rect.left
-    const canvasY = e.clientY - rect.top
-    const hitId = getItemAtCanvasPoint(canvas, canvasX, canvasY, localItems)
+    if (spacePressedRef.current) {
+      panStartRef.current = { x: e.clientX, y: e.clientY }
+      panStartOffsetRef.current = { x: offsetX, y: offsetY }
+      setIsPanning(true)
+      return
+    }
+    const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     if (hitId == null || hitId !== selectedItemId) return
+    if (!isEditMode) return
     const item = localItems.find((i) => i.id === hitId)
     if (!item) return
-    const handle = getHandleAtCanvasPoint(canvas, canvasX, canvasY, item)
+    const handle = getHandleAtCanvasPoint(canvas, worldX, worldY, item)
     if (handle != null) {
       e.preventDefault()
       e.stopPropagation()
-      const orig = canvasToOriginal(canvas, canvasX, canvasY)
+      const orig = canvasToOriginal(canvas, worldX, worldY)
       resizeStartRef.current = {
         startX: orig.x,
         startY: orig.y,
@@ -318,7 +424,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       setResizeHandle(handle)
       return
     }
-    const orig = canvasToOriginal(canvas, canvasX, canvasY)
+    const orig = canvasToOriginal(canvas, worldX, worldY)
     dragStartPositionRef.current = { x: item.x, y: item.y }
     didDragRef.current = false
     setIsDragging(true)
@@ -411,9 +517,9 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     const onResizeMove = (e: MouseEvent) => {
       const canvas = canvasRef.current
       if (!canvas) return
-      const rect = canvas.getBoundingClientRect()
-      const canvasX = e.clientX - rect.left
-      const canvasY = e.clientY - rect.top
+      const world = clientToWorldFromRefs(e.clientX, e.clientY)
+      const canvasX = world.x
+      const canvasY = world.y
       const imageNaturalWidth = imageNaturalWidthRef.current
       const imageNaturalHeight = imageNaturalHeightRef.current
       const id = resizeItemIdRef.current
@@ -496,9 +602,12 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const canvasX = e.clientX - rect.left
-    const canvasY = e.clientY - rect.top
+    if (isPanning) {
+      setOffsetX(panStartOffsetRef.current.x + (e.clientX - panStartRef.current.x))
+      setOffsetY(panStartOffsetRef.current.y + (e.clientY - panStartRef.current.y))
+      return
+    }
+    const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
     const imageNaturalWidth = imageNaturalWidthRef.current
     const imageNaturalHeight = imageNaturalHeightRef.current
 
@@ -506,7 +615,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       const item = localItems.find((i) => i.id === dragItemId)
       if (!item) return
       if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
-      const orig = canvasToOriginal(canvas, canvasX, canvasY)
+      const orig = canvasToOriginal(canvas, worldX, worldY)
       let newX = Math.round(orig.x - dragOffset.dx)
       let newY = Math.round(orig.y - dragOffset.dy)
       newX = Math.max(0, Math.min(newX, imageNaturalWidth - item.width))
@@ -523,11 +632,11 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       return
     }
 
-    const hitId = getItemAtCanvasPoint(canvas, canvasX, canvasY, localItems)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     setHoveredItemId(hitId ?? null)
     if (hitId && hitId === selectedItemId) {
       const item = localItems.find((i) => i.id === hitId)
-      const handle = item ? getHandleAtCanvasPoint(canvas, canvasX, canvasY, item) : null
+      const handle = item ? getHandleAtCanvasPoint(canvas, worldX, worldY, item) : null
       setHoveredHandle(handle)
     } else {
       setHoveredHandle(null)
@@ -535,6 +644,10 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   }
 
   const handleCanvasMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false)
+      return
+    }
     if (isResizing) {
       handleResizeEnd.current()
     } else if (isDragging && dragItemId) {
@@ -555,13 +668,10 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     const img = imageRef.current
     if (!canvas || !img || !imageLoaded || !userId) return
 
-    // Get click position relative to canvas
-    const rect = canvas.getBoundingClientRect()
-    const clickX = e.clientX - rect.left
-    const clickY = e.clientY - rect.top
+    const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
 
     // Hit test: clicking on an item selects it only (no add-item)
-    const hitId = getItemAtCanvasPoint(canvas, clickX, clickY, localItems)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     if (hitId != null) {
       setSelectedItemId(hitId)
       return
@@ -569,6 +679,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
 
     // Click on empty space: clear selection and add new item
     setSelectedItemId(null)
+    if (!isEditMode) return
 
     // Get image natural dimensions
     const imageNaturalWidth = imageNaturalWidthRef.current
@@ -576,11 +687,10 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
 
     if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
 
-    // Convert canvas coordinates to original image coordinates
-    const scaleX = imageNaturalWidth / canvas.width
-    const scaleY = imageNaturalHeight / canvas.height
-    const origX = clickX * scaleX
-    const origY = clickY * scaleY
+    // Convert world coordinates to original image coordinates
+    const orig = canvasToOriginal(canvas, worldX, worldY)
+    const origX = orig.x
+    const origY = orig.y
 
     // Create item centered at click position
     const width = 250
@@ -645,47 +755,111 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     }
   }
 
-  return (
-    <div ref={containerRef} className="relative w-full bg-white rounded-lg shadow-lg overflow-hidden">
-      {/* Background Image */}
-      <img
-        ref={imageRef}
-        src={imageUrl}
-        alt={name}
-        className="w-full h-auto block"
-        style={{ maxWidth: '100%' }}
-      />
+  const handleToggleEditMode = () => {
+    if (isEditMode) {
+      const dragId = dragItemIdRef.current
+      if (dragId) {
+        const start = dragStartPositionRef.current
+        setLocalItems((prev) =>
+          prev.map((it) => (it.id === dragId ? { ...it, x: start.x, y: start.y } : it))
+        )
+        setIsDragging(false)
+        setDragItemId(null)
+        dragItemIdRef.current = null
+        draggedItemCurrentRef.current = null
+        didDragRef.current = false
+      }
+      const resizeId = resizeItemIdRef.current
+      if (resizeId) {
+        const start = resizeStartRef.current
+        if (start) {
+          setLocalItems((prev) =>
+            prev.map((it) =>
+              it.id === resizeId
+                ? { ...it, x: start.origX, y: start.origY, width: start.origW, height: start.origH }
+                : it
+            )
+          )
+        }
+        setIsResizing(false)
+        setResizeHandle(null)
+        resizeItemIdRef.current = null
+        resizeHandleRef.current = null
+        resizedItemCurrentRef.current = null
+        resizeStartRef.current = null
+        didResizeRef.current = false
+      }
+    }
+    setIsEditMode((prev) => !prev)
+  }
 
-      {/* Canvas Overlay */}
-      <canvas
-        ref={canvasRef}
-        className="absolute top-0 left-0"
-        style={{
-          cursor: isDragging
-            ? 'grabbing'
-            : isResizing
-              ? resizeHandle === 'tl' || resizeHandle === 'br'
-                ? 'nwse-resize'
-                : 'nesw-resize'
-              : hoveredHandle
-                ? hoveredHandle === 'tl' || hoveredHandle === 'br'
-                  ? 'nwse-resize'
-                  : 'nesw-resize'
-                : hoveredItemId && hoveredItemId === selectedItemId
+  return (
+    <div className="w-full">
+      <div className="relative">
+      <div
+        ref={containerRef}
+        className="relative w-full bg-white rounded-lg shadow-lg overflow-hidden"
+      >
+        <div
+          className="relative w-full"
+          style={{
+            transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
+            transformOrigin: '0 0',
+          }}
+        >
+          {/* Background Image */}
+          <img
+            ref={imageRef}
+            src={imageUrl}
+            alt={name}
+            className="w-full h-auto block"
+            style={{ maxWidth: '100%' }}
+          />
+
+          {/* Canvas Overlay */}
+          <canvas
+            ref={canvasRef}
+            className="absolute top-0 left-0"
+            style={{
+                cursor: isPanning
+                ? 'grabbing'
+                : spacePressed
                   ? 'grab'
-                  : hoveredItemId
-                    ? 'pointer'
-                    : 'crosshair',
-        }}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onMouseUp={handleCanvasMouseUp}
-        onMouseLeave={() => {
-          setHoveredItemId(null)
-          setHoveredHandle(null)
-        }}
-        onClick={handleCanvasClick}
-      />
+                  : isDragging
+                    ? 'grabbing'
+                    : isResizing
+                      ? resizeHandle === 'tl' || resizeHandle === 'br'
+                        ? 'nwse-resize'
+                        : 'nesw-resize'
+                      : hoveredHandle
+                        ? hoveredHandle === 'tl' || hoveredHandle === 'br'
+                          ? 'nwse-resize'
+                          : 'nesw-resize'
+                        : hoveredItemId && hoveredItemId === selectedItemId
+                          ? 'grab'
+                          : hoveredItemId
+                            ? 'pointer'
+                            : 'crosshair',
+            }}
+            onMouseDown={handleCanvasMouseDown}
+            onMouseMove={handleCanvasMouseMove}
+            onMouseUp={handleCanvasMouseUp}
+            onMouseLeave={() => {
+              setHoveredItemId(null)
+              setHoveredHandle(null)
+            }}
+            onClick={handleCanvasClick}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        className="absolute top-2 right-2 z-10 px-2 py-1 text-sm rounded border border-gray-300 bg-white shadow hover:bg-gray-50"
+        onClick={handleToggleEditMode}
+      >
+        {isEditMode ? 'Done' : 'Edit'}
+      </button>
+      </div>
 
       {/* Error Message */}
       {error && (
