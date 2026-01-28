@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { Item } from '@/types'
+import type { Bag } from '@/types'
 import { supabase } from '@/lib/supabase/browser'
+import { DetailsPanel } from '@/components/planner/DetailsPanel'
 
 // Survives remounts (Strict Mode / fast refresh) so we don't overwrite localItems after resize/drag.
 let lastSyncedPackId: string | null = null
@@ -11,17 +12,17 @@ interface PlannerCanvasProps {
   imageUrl: string
   name: string
   packId: string
-  items: Item[]
+  bags: Bag[]
 }
 
-export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasProps) {
+export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasProps) {
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const imageNaturalWidthRef = useRef<number>(0)
   const imageNaturalHeightRef = useRef<number>(0)
   const [imageLoaded, setImageLoaded] = useState(false)
-  const [localItems, setLocalItems] = useState<Item[]>(items)
+  const [localItems, setLocalItems] = useState<Bag[]>(bags)
   const [userId, setUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null)
@@ -32,9 +33,9 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const dragStartPositionRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const didDragRef = useRef(false)
   const dragItemIdRef = useRef<string | null>(null)
-  const draggedItemCurrentRef = useRef<Item | null>(null)
+  const draggedItemCurrentRef = useRef<Bag | null>(null)
   const selectedItemIdRef = useRef<string | null>(null)
-  const localItemsRef = useRef<Item[]>(localItems)
+  const localItemsRef = useRef<Bag[]>(localItems)
   const [isResizing, setIsResizing] = useState(false)
   const [resizeHandle, setResizeHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
   const resizeStartRef = useRef<{
@@ -46,7 +47,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     origH: number
   } | null>(null)
   const resizeItemIdRef = useRef<string | null>(null)
-  const resizedItemCurrentRef = useRef<Item | null>(null)
+  const resizedItemCurrentRef = useRef<Bag | null>(null)
   const resizeHandleRef = useRef<'tl' | 'tr' | 'bl' | 'br' | null>(null)
   const didResizeRef = useRef(false)
   const [hoveredHandle, setHoveredHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
@@ -63,6 +64,13 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   const panStartOffsetRef = useRef({ x: 0, y: 0 })
   const [isEditMode, setIsEditMode] = useState(false)
   const isEditModeRef = useRef(false)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const isDetailsOpenRef = useRef(false)
+  const [detailsItemId, setDetailsItemId] = useState<string | null>(null)
+  const [detailsSaveError, setDetailsSaveError] = useState<string | null>(null)
+
+  const detailsItem =
+    detailsItemId != null ? localItems.find((i) => i.id === detailsItemId) ?? null : null
 
   const MIN_ZOOM = 0.25
   const MAX_ZOOM = 2.5
@@ -78,6 +86,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
   offsetXRef.current = offsetX
   offsetYRef.current = offsetY
   isEditModeRef.current = isEditMode
+  isDetailsOpenRef.current = isDetailsOpen
 
   function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
     const el = containerRef.current
@@ -120,7 +129,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     canvas: HTMLCanvasElement,
     canvasX: number,
     canvasY: number,
-    itemsList: Item[]
+    itemsList: Bag[]
   ): string | null {
     const imageNaturalWidth = imageNaturalWidthRef.current
     const imageNaturalHeight = imageNaturalHeightRef.current
@@ -148,7 +157,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     canvas: HTMLCanvasElement,
     canvasX: number,
     canvasY: number,
-    item: Item
+    item: Bag
   ): 'tl' | 'tr' | 'bl' | 'br' | null {
     const imageNaturalWidth = imageNaturalWidthRef.current
     const imageNaturalHeight = imageNaturalHeightRef.current
@@ -172,7 +181,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     return null
   }
 
-  const drawOverlay = (itemsToDraw: Item[] = localItems) => {
+  const drawOverlay = (itemsToDraw: Bag[] = localItems) => {
     const canvas = canvasRef.current
     const img = imageRef.current
     if (!canvas || !img || !imageLoaded) return
@@ -301,17 +310,48 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     fetchUserId()
   }, [])
 
-  // Sync localItems from props.items only when packId actually changes (e.g. navigating to another pack).
+  // Sync localItems from props.bags only when packId actually changes (e.g. navigating to another pack).
   // lastSyncedPackId is module-level so it survives remounts; we don't overwrite local edits after resize/drag.
   useEffect(() => {
     if (lastSyncedPackId === packId) return
     lastSyncedPackId = packId
-    setLocalItems(items)
-  }, [packId, items])
+    setLocalItems(bags)
+  }, [packId, bags])
+
+  /** Returns true if keyboard events should go to the element (no canvas shortcuts). */
+  function isTypingTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null
+    if (!el || typeof el.closest !== 'function') return false
+    const tag = el.tagName?.toLowerCase()
+    const isControl =
+      tag === 'input' ||
+      tag === 'textarea' ||
+      tag === 'select' ||
+      !!el.isContentEditable
+    if (isControl) return true
+    return !!el.closest('input, textarea, select, [contenteditable="true"]')
+  }
+
+  function skipWhenTyping(e: KeyboardEvent): boolean {
+    return isTypingTarget(e.target) || isTypingTarget(document.activeElement)
+  }
+
+  /** True when focus is in an input/textarea/contentEditable — do not capture Space. */
+  function isTypingActive(): boolean {
+    const el = document.activeElement
+    return !!(
+      el &&
+      (el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        (el as HTMLElement).isContentEditable ||
+        el.getAttribute?.('role') === 'textbox')
+    )
+  }
 
   // Delete selected item on Delete/Backspace
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (skipWhenTyping(e)) return
       if (!isEditModeRef.current) return
       const id = selectedItemIdRef.current
       if (id == null) return
@@ -320,12 +360,13 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       const items = localItemsRef.current
       const item = items.find((i) => i.id === id)
       if (!item) return
+      if (item.locked) return
       setLocalItems((prev) => prev.filter((i) => i.id !== id))
       setSelectedItemId(null)
-      const { error: deleteError } = await supabase.from('items').delete().eq('id', id)
+      const { error: deleteError } = await supabase.from('bags').delete().eq('id', id)
       if (deleteError) {
         setLocalItems((prev) => [...prev, item])
-        setError(deleteError.message ?? 'Failed to delete item')
+        setError(deleteError.message ?? 'Failed to delete bag.')
         setTimeout(() => setError(null), 5000)
       }
     }
@@ -333,28 +374,58 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Only attach Space-to-pan when details panel is closed. When panel is open, no listener → Space always works in inputs.
   useEffect(() => {
+    if (isDetailsOpen) return
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault()
-        spacePressedRef.current = true
-        setSpacePressed(true)
-      }
+      if (e.code !== 'Space') return
+      const activeEl = document.activeElement
+      const target = e.target as Node | null
+      const typing =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (activeEl as HTMLElement)?.isContentEditable ||
+        (target as HTMLElement)?.isContentEditable
+      if (typing) return
+      e.preventDefault()
+      spacePressedRef.current = true
+      setSpacePressed(true)
     }
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        spacePressedRef.current = false
-        setSpacePressed(false)
-        setIsPanning(false)
-      }
+      if (e.code !== 'Space') return
+      const activeEl = document.activeElement
+      const target = e.target as Node | null
+      const typing =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (activeEl as HTMLElement)?.isContentEditable ||
+        (target as HTMLElement)?.isContentEditable
+      if (typing) return
+      spacePressedRef.current = false
+      setSpacePressed(false)
+      setIsPanning(false)
     }
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('keydown', onKeyDown, false)
+    window.addEventListener('keyup', onKeyUp, false)
     return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('keydown', onKeyDown, false)
+      window.removeEventListener('keyup', onKeyUp, false)
     }
-  }, [])
+  }, [isDetailsOpen])
+
+  // Prevent background scroll while details panel is open
+  useEffect(() => {
+    if (!isDetailsOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevOverflow
+    }
+  }, [isDetailsOpen])
 
   const handleWheelRef = useRef((_e: WheelEvent) => {})
   handleWheelRef.current = (e: WheelEvent) => {
@@ -404,6 +475,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     if (!isEditMode) return
     const item = localItems.find((i) => i.id === hitId)
     if (!item) return
+    if (item.locked) return
     const handle = getHandleAtCanvasPoint(canvas, worldX, worldY, item)
     if (handle != null) {
       e.preventDefault()
@@ -448,7 +520,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     dragItemIdRef.current = null
     draggedItemCurrentRef.current = null
     const { error: updateError } = await supabase
-      .from('items')
+      .from('bags')
       .update({ x: item.x, y: item.y })
       .eq('id', id)
     if (updateError) {
@@ -458,7 +530,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
           it.id === id ? { ...it, x: start.x, y: start.y } : it
         )
       )
-      setError(updateError.message ?? 'Failed to move item')
+      setError(updateError.message ?? 'Failed to move bag.')
       setTimeout(() => setError(null), 5000)
     }
   }
@@ -491,7 +563,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     resizedItemCurrentRef.current = null
     resizeStartRef.current = null
     const { error: updateError } = await supabase
-      .from('items')
+      .from('bags')
       .update({ x, y, width, height })
       .eq('id', id)
     if (updateError && start) {
@@ -702,9 +774,9 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
     x = Math.max(0, Math.min(x, imageNaturalWidth - width))
     y = Math.max(0, Math.min(y, imageNaturalHeight - height))
 
-    // Create optimistic item with temporary ID
+    // Create optimistic bag with temporary ID
     const tempId = `temp-${Date.now()}`
-    const optimisticItem: Item = {
+    const optimisticItem: Bag = {
       id: tempId,
       pack_id: packId,
       user_id: userId,
@@ -713,6 +785,11 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
       width,
       height,
       created_at: new Date().toISOString(),
+      name: 'Bag',
+      color: '',
+      bag_weight: 0,
+      locked: false,
+      updated_at: new Date().toISOString(),
     }
 
     // Add optimistic item immediately
@@ -722,7 +799,7 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
 
     // Insert to Supabase
     const { data, error: insertError } = await supabase
-      .from('items')
+      .from('bags')
       .insert({
         pack_id: packId,
         user_id: userId,
@@ -730,28 +807,83 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
         y,
         width,
         height,
+        name: 'Bag',
+        color: '',
+        bag_weight: 0,
+        locked: false,
+        updated_at: new Date().toISOString(),
       })
       .select()
       .single()
 
     if (insertError) {
-      // Remove optimistic item and show error
+      // Remove optimistic bag and show error
       setLocalItems((prev) => {
         const itemsWithoutTemp = prev.filter((item) => item.id !== tempId)
         drawOverlay(itemsWithoutTemp)
         return itemsWithoutTemp
       })
-      setError(insertError.message || 'Failed to create item')
+      setError(insertError.message || 'Failed to create bag')
       
       // Clear error after 5 seconds
       setTimeout(() => setError(null), 5000)
     } else if (data) {
-      // Replace optimistic item with real item
+      // Replace optimistic bag with real bag
       setLocalItems((prev) => {
         const replaced = prev.map((item) => (item.id === tempId ? data : item))
         drawOverlay(replaced)
         return replaced
       })
+    }
+  }
+
+  const handleCanvasDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas || !imageLoaded) return
+    const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
+    if (hitId != null) {
+      setDetailsItemId(hitId)
+      setIsDetailsOpen(true)
+    }
+  }
+
+  const handleCloseDetails = () => {
+    setIsDetailsOpen(false)
+    setDetailsItemId(null)
+    setDetailsSaveError(null)
+  }
+
+  const handleUpdateBag = async (
+    bagId: string,
+    patch: Partial<Pick<Bag, 'name' | 'color' | 'locked'> & { bag_weight_kg?: number }>
+  ) => {
+    const previousBag = localItemsRef.current.find((b) => b.id === bagId) ?? null
+    if (!previousBag) return
+
+    setLocalItems((prev) =>
+      prev.map((b) => (b.id === bagId ? { ...b, ...patch } : b))
+    )
+
+    const payload: Record<string, unknown> = {}
+    if (patch.name !== undefined) payload.name = patch.name
+    if (patch.color !== undefined) payload.color = patch.color
+    if (patch.bag_weight_kg !== undefined) payload.bag_weight_kg = patch.bag_weight_kg
+    if (patch.locked !== undefined) payload.locked = patch.locked
+
+    const { error: updateError } = await supabase
+      .from('bags')
+      .update(payload)
+      .eq('id', bagId)
+
+    if (updateError) {
+      setLocalItems((prev) =>
+        prev.map((b) => (b.id === bagId ? previousBag : b))
+      )
+      setDetailsSaveError(updateError.message ?? 'Failed to save bag')
+      setTimeout(() => setDetailsSaveError(null), 5000)
+    } else {
+      setDetailsSaveError(null)
     }
   }
 
@@ -849,16 +981,41 @@ export function PlannerCanvas({ imageUrl, name, packId, items }: PlannerCanvasPr
               setHoveredHandle(null)
             }}
             onClick={handleCanvasClick}
+            onDoubleClick={handleCanvasDoubleClick}
           />
         </div>
       </div>
-      <button
-        type="button"
-        className="absolute top-2 right-2 z-10 px-2 py-1 text-sm rounded border border-gray-300 bg-white shadow hover:bg-gray-50"
-        onClick={handleToggleEditMode}
-      >
-        {isEditMode ? 'Done' : 'Edit'}
-      </button>
+      {!isDetailsOpen && (
+        <div className="absolute top-0 right-0 z-50 pointer-events-none">
+          <button
+            type="button"
+            className="pointer-events-auto mt-2 mr-2 px-2 py-1 text-sm rounded border border-gray-300 bg-white shadow hover:bg-gray-50"
+            onClick={handleToggleEditMode}
+          >
+            {isEditMode ? 'Done' : 'Edit'}
+          </button>
+        </div>
+      )}
+      {isDetailsOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/20 z-10"
+            role="button"
+            tabIndex={-1}
+            onClick={handleCloseDetails}
+            aria-label="Close panel"
+          />
+          <DetailsPanel
+            bag={detailsItem}
+            isEditMode={isEditMode}
+            onClose={handleCloseDetails}
+            onToggleEditMode={handleToggleEditMode}
+            onUpdateBag={handleUpdateBag}
+            saveError={detailsSaveError}
+            clearSaveError={() => setDetailsSaveError(null)}
+          />
+        </>
+      )}
       </div>
 
       {/* Error Message */}

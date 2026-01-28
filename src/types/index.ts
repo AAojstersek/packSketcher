@@ -31,6 +31,17 @@ export interface Pack {
 
 export interface Item {
   id: string
+  bag_id: string
+  user_id: string
+  name: string
+  description: string | null
+  weight: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Bag {
+  id: string
   pack_id: string
   user_id: string
   x: number
@@ -38,4 +49,10 @@ export interface Item {
   width: number
   height: number
   created_at: string
+  name: string
+  color: string
+  bag_weight_kg?: number
+  bag_weight?: number | null
+  locked: boolean
+  updated_at: string
 }

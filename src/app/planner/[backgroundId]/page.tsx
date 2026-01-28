@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { PlannerCanvas } from './PlannerCanvas'
 import { redirect } from 'next/navigation'
-import type { Item } from '@/types'
+import type { Bag } from '@/types'
 
 interface PlannerPageProps {
   params: Promise<{ backgroundId: string }>
@@ -88,22 +88,22 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
     packId = newPack.id
   }
 
-  // Load items for this pack
-  let items: Item[] = []
-  const { data: itemsData, error: itemsError } = await supabase
-    .from('items')
+  // Load bags for this pack
+  let bags: Bag[] = []
+  const { data: bagsData, error: bagsError } = await supabase
+    .from('bags')
     .select('*')
     .eq('pack_id', packId)
     .eq('user_id', user.id)
     .order('created_at', { ascending: true })
 
-  if (itemsError) {
+  if (bagsError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Error</h1>
           <p className="text-gray-600 mb-4">
-            Failed to load items. Please try again.
+            Failed to load bags. Please try again.
           </p>
           <a
             href="/dashboard"
@@ -116,7 +116,7 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
     )
   }
 
-  items = itemsData || []
+  bags = bagsData || []
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -136,7 +136,7 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
           imageUrl={background.image_url}
           name={background.name}
           packId={packId}
-          items={items}
+          bags={bags}
         />
       </div>
     </div>
