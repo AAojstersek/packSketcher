@@ -8,6 +8,26 @@ import { DetailsPanel } from '@/components/planner/DetailsPanel'
 // Survives remounts (Strict Mode / fast refresh) so we don't overwrite localItems after resize/drag.
 let lastSyncedPackId: string | null = null
 
+/** Parse hex color to [r, g, b] 0-255. Supports #RRGGBB and #RGB. Fallback: neutral gray. */
+function hexToRgb(hex: string): [number, number, number] {
+  const s = (hex ?? '').trim()
+  if (s.startsWith('#')) {
+    const short = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(s)
+    if (short) {
+      return [
+        parseInt(short[1] + short[1], 16),
+        parseInt(short[2] + short[2], 16),
+        parseInt(short[3] + short[3], 16),
+      ]
+    }
+    const long = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(s)
+    if (long) {
+      return [parseInt(long[1], 16), parseInt(long[2], 16), parseInt(long[3], 16)]
+    }
+  }
+  return [128, 128, 128]
+}
+
 interface PlannerCanvasProps {
   imageUrl: string
   name: string
@@ -200,34 +220,37 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
       const scaleX = canvas.width / imageNaturalWidth
       const scaleY = canvas.height / imageNaturalHeight
 
-      // Draw items using scaled coordinates
+      // Draw items using scaled coordinates and bag.color
       itemsToDraw.forEach((item) => {
         const itemX = item.x * scaleX
         const itemY = item.y * scaleY
         const itemWidth = item.width * scaleX
         const itemHeight = item.height * scaleY
+        const [r, g, b] = hexToRgb(item.color ?? '#888888')
+        const isSelected = item.id === selectedItemId
+        const isHovered = item.id === hoveredItemId
 
-        // Fill with semi-transparent color
-        ctx.fillStyle = 'rgba(0, 200, 0, 0.25)'
+        // Subtle outer stroke for selected (glow)
+        if (isSelected) {
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.2)`
+          ctx.lineWidth = 5
+          ctx.strokeRect(itemX - 2, itemY - 2, itemWidth + 4, itemHeight + 4)
+        }
+
+        // Fill with bag color, low alpha
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.15)`
         ctx.fillRect(itemX, itemY, itemWidth, itemHeight)
 
-        // Stroke by state: selected > hovered > normal
-        if (item.id === selectedItemId) {
-          ctx.strokeStyle = 'rgba(255, 0, 0, 0.95)'
-          ctx.lineWidth = 3
-        } else if (item.id === hoveredItemId) {
-          ctx.strokeStyle = 'rgba(255, 165, 0, 0.9)'
-          ctx.lineWidth = 2
-        } else {
-          ctx.strokeStyle = 'rgba(0, 160, 0, 0.9)'
-          ctx.lineWidth = 1
-        }
+        // Border: bag color, higher alpha; thickness by state
+        const strokeAlpha = isSelected ? 0.8 : 0.65
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${strokeAlpha})`
+        ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2 : 1.5
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
 
-        // Corner handles when selected
-        if (item.id === selectedItemId) {
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.95)'
-          ctx.strokeStyle = 'rgba(255, 0, 0, 0.95)'
+        // Corner handles when selected (bag color, high alpha)
+        if (isSelected) {
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.95)`
           ctx.lineWidth = 1
           const corners = [
             [itemX, itemY],
@@ -989,7 +1012,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
         <div className="absolute top-0 right-0 z-50 pointer-events-none">
           <button
             type="button"
-            className="pointer-events-auto mt-2 mr-2 px-2 py-1 text-sm rounded border border-gray-300 bg-white shadow hover:bg-gray-50"
+            className="pointer-events-auto mt-2 mr-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
             onClick={handleToggleEditMode}
           >
             {isEditMode ? 'Done' : 'Edit'}
@@ -1011,6 +1034,11 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
             onClose={handleCloseDetails}
             onToggleEditMode={handleToggleEditMode}
             onUpdateBag={handleUpdateBag}
+            onSaveSuccess={(bagRow) =>
+              setLocalItems((prev) =>
+                prev.map((b) => (b.id === bagRow.id ? { ...b, ...bagRow } : b))
+              )
+            }
             saveError={detailsSaveError}
             clearSaveError={() => setDetailsSaveError(null)}
           />

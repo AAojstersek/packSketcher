@@ -1,8 +1,8 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { BackgroundCard } from './BackgroundCard'
 import { LogoutButton } from './LogoutButton'
 import { TemplateGrid } from './TemplateGrid'
 import type { Background } from '@/types'
-import Image from 'next/image'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 
@@ -23,15 +23,6 @@ const LOCAL_TEMPLATES = [
     imageUrl: '/ozadja/backpackOzadje.png',
   },
 ]
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
@@ -62,21 +53,27 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Logged in as: <span className="font-medium">{user.email}</span>
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <Link
+              href="/dashboard"
+              className="text-xl font-semibold text-slate-900 hover:text-slate-700"
+            >
+              PackSketcher
+            </Link>
+            <p className="mt-1 text-sm text-slate-600">
+              Logged in as <span className="font-medium">{user.email}</span>
+            </p>
+          </div>
+          <LogoutButton />
         </div>
 
         {/* Background Templates Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+          <h2 className="text-base font-semibold text-slate-900 mb-4">
             Background Templates
           </h2>
           <TemplateGrid templates={LOCAL_TEMPLATES} />
@@ -85,12 +82,12 @@ export default async function DashboardPage() {
         {/* Recent Backgrounds Section */}
         <div className="mb-12">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-slate-900">
               Recent Backgrounds
             </h2>
             <button
               disabled
-              className="px-4 py-2 bg-gray-300 text-gray-600 rounded-md cursor-not-allowed text-sm"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-400 cursor-not-allowed"
             >
               Upload Custom Background
             </button>
@@ -98,38 +95,12 @@ export default async function DashboardPage() {
           {backgrounds && backgrounds.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {backgrounds.map((bg: Background) => (
-                <Link
-                  key={bg.id}
-                  href={`/planner/${bg.id}`}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow block"
-                >
-                  {bg.image_url && (
-                    <div className="relative h-48 bg-gray-100">
-                      <Image
-                        src={bg.image_url}
-                        alt={bg.name}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                  <div className="p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      {bg.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 capitalize mb-1">
-                      {bg.type}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {formatDate(bg.created_at)}
-                    </p>
-                  </div>
-                </Link>
+                <BackgroundCard key={bg.id} bg={bg} />
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-md p-8 text-center">
-              <p className="text-gray-500">
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <p className="text-slate-500">
                 No saved backgrounds yet. Use a template above to get started.
               </p>
             </div>
@@ -138,19 +109,14 @@ export default async function DashboardPage() {
 
         {/* User Stats Placeholder */}
         <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+          <h2 className="text-base font-semibold text-slate-900 mb-4">
             Your Stats
           </h2>
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <p className="text-gray-500 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-slate-500 text-center">
               Stats will be displayed here soon.
             </p>
           </div>
-        </div>
-
-        {/* Logout */}
-        <div className="flex justify-end">
-          <LogoutButton />
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@
  * - delete newly added item before save -> save (should not attempt DB delete)
  */
 
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Bag, Item } from '@/types'
 import { supabase } from '@/lib/supabase/browser'
@@ -67,6 +68,7 @@ function TrashIcon() {
 }
 
 const SHOW_DEBUG = false
+const SHOW_ITEM_WEIGHT = true
 
 const DEFAULT_COLOR = '#888888'
 const PRESET_COLORS = [
@@ -99,6 +101,7 @@ export interface DetailsPanelProps {
     bagId: string,
     patch: Partial<Pick<Bag, 'name' | 'color' | 'locked'> & { bag_weight_kg?: number }>
   ) => void
+  onSaveSuccess?: (bagRow: Bag) => void
   saveError?: string | null
   clearSaveError?: () => void
 }
@@ -113,6 +116,7 @@ export function DetailsPanel({
   onClose,
   onToggleEditMode,
   onUpdateBag,
+  onSaveSuccess,
   saveError = null,
   clearSaveError,
 }: DetailsPanelProps) {
@@ -125,6 +129,7 @@ export function DetailsPanel({
   const [persistedItems, setPersistedItems] = useState<Item[]>([])
   const [draftItems, setDraftItems] = useState<DraftItem[]>([])
   const [itemWeightDisplayById, setItemWeightDisplayById] = useState<Record<string, string>>({})
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [itemsLoadError, setItemsLoadError] = useState<string | null>(null)
   const [itemsSaveError, setItemsSaveError] = useState<string | null>(null)
@@ -170,6 +175,7 @@ export function DetailsPanel({
       setPersistedItems([])
       setDraftItems([])
       setItemWeightDisplayById({})
+      setExpandedItemId(null)
       setItemsLoadError(null)
       setItemsSaveError(null)
       return
@@ -211,6 +217,7 @@ export function DetailsPanel({
           setPersistedItems([])
           setDraftItems([])
           setItemWeightDisplayById({})
+          setExpandedItemId(null)
           return
         }
         const list = (itemsRes.data ?? []) as Item[]
@@ -219,12 +226,14 @@ export function DetailsPanel({
         setItemWeightDisplayById(
           Object.fromEntries(list.map((i) => [i.id, formatItemWeightDisplay(i.weight)]))
         )
+        setExpandedItemId(null)
       } catch (e) {
         if (!cancelled) {
           setItemsLoadError(e instanceof Error ? e.message : 'Failed to load items')
           setPersistedItems([])
           setDraftItems([])
           setItemWeightDisplayById({})
+          setExpandedItemId(null)
         }
       }
     })()
@@ -315,6 +324,7 @@ export function DetailsPanel({
     }
     setDraftItems((prev) => [...prev, newItem])
     setItemWeightDisplayById((prev) => ({ ...prev, [newItem.id]: '' }))
+    setExpandedItemId(newItem.id)
     setItemsSaveError(null)
     clearSaveError?.()
   }, [bag, currentUserId, clearSaveError])
@@ -418,6 +428,8 @@ export function DetailsPanel({
       setItemWeightDisplayById(
         Object.fromEntries(items.map((i) => [i.id, formatItemWeightDisplay(i.weight)]))
       )
+      setExpandedItemId(null)
+      onSaveSuccess?.(bagRow)
     } catch (e) {
       setItemsSaveError(
         e instanceof Error ? e.message : 'Failed to save items'
@@ -454,6 +466,7 @@ export function DetailsPanel({
       setItemWeightDisplayById(
         Object.fromEntries(items.map((i) => [i.id, formatItemWeightDisplay(i.weight)]))
       )
+      setExpandedItemId(null)
     } catch (e) {
       setItemsLoadError(e instanceof Error ? e.message : 'Failed to reload')
     } finally {
@@ -466,23 +479,23 @@ export function DetailsPanel({
 
   return (
     <div
-      className="fixed right-0 top-0 h-[100dvh] w-72 z-20 flex flex-col border-l border-gray-300 bg-white shadow-lg"
+      className="fixed right-0 top-0 h-[100dvh] w-72 z-20 flex flex-col border-l border-slate-200 bg-white shadow-xl"
       data-details-panel
     >
-      <header className="flex-none p-4 pt-14">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-slate-800">Bag details</h3>
+      <header className="flex-none p-3 pt-10">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="text-sm font-semibold text-slate-900 truncate">Bag details</h3>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="px-2 py-1 text-sm rounded border border-gray-300 bg-white shadow hover:bg-gray-50 text-slate-800"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               onClick={onToggleEditMode}
             >
               {isEditMode ? 'Done' : 'Edit'}
             </button>
             <button
               type="button"
-              className="px-2 py-1 text-sm rounded border border-gray-300 hover:bg-gray-50 text-slate-800"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               onClick={onClose}
             >
               Close
@@ -490,7 +503,7 @@ export function DetailsPanel({
           </div>
         </div>
         {(saveError || validationError || itemsLoadError || itemsSaveError) && (
-          <div className="mb-3 text-sm text-red-600" role="alert">
+          <div className="mb-2 text-xs text-red-600" role="alert">
             {validationError ??
               saveError ??
               itemsSaveError ??
@@ -498,32 +511,32 @@ export function DetailsPanel({
           </div>
         )}
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 pt-0">
-        <dl className="text-sm space-y-3 text-slate-700">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 pt-0">
+        <dl className="space-y-2 text-sm text-slate-700">
         {SHOW_DEBUG && (
           <>
             <div>
-              <dt className="text-slate-800">id</dt>
+              <dt className="text-sm font-medium text-slate-900">id</dt>
               <dd className="font-mono truncate text-slate-700">{bag?.id ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-800">pack_id</dt>
+              <dt className="text-sm font-medium text-slate-900">pack_id</dt>
               <dd className="font-mono truncate text-slate-700">{bag?.pack_id ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-800">x</dt>
+              <dt className="text-sm font-medium text-slate-900">x</dt>
               <dd className="text-slate-700">{bag != null ? bag.x : '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-800">y</dt>
+              <dt className="text-sm font-medium text-slate-900">y</dt>
               <dd className="text-slate-700">{bag != null ? bag.y : '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-800">width</dt>
+              <dt className="text-sm font-medium text-slate-900">width</dt>
               <dd className="text-slate-700">{bag != null ? bag.width : '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-800">height</dt>
+              <dt className="text-sm font-medium text-slate-900">height</dt>
               <dd className="text-slate-700">{bag != null ? bag.height : '—'}</dd>
             </div>
           </>
@@ -531,80 +544,79 @@ export function DetailsPanel({
 
         {bag != null && draft != null && (
           <>
+            {/* Bag name + weight on one row */}
             <div>
-              <dt className="text-slate-800 mb-1">Bag name</dt>
-              <dd>
-                <input
-                  ref={nameInputRef}
-                  type="text"
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500"
-                  maxLength={60}
-                  value={draft.name}
-                  onChange={handleNameChange}
-                  disabled={readonly || isSaving}
-                />
+              <dt className="sr-only">Bag name and weight</dt>
+              <dd className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="details-bag-name" className="block text-xs font-medium text-slate-500 mb-0.5">Bag name</label>
+                  <input
+                    id="details-bag-name"
+                    ref={nameInputRef}
+                    type="text"
+                    className="w-full min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                    maxLength={60}
+                    value={draft.name}
+                    onChange={handleNameChange}
+                    disabled={readonly || isSaving}
+                  />
+                </div>
+                <div className="w-20 shrink-0">
+                  <label htmlFor="details-bag-weight" className="block text-xs font-medium text-slate-500 mb-0.5">kg</label>
+                  <input
+                    id="details-bag-weight"
+                    type="text"
+                    inputMode="decimal"
+                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                    placeholder="0"
+                    value={weightDisplay}
+                    onChange={handleWeightChange}
+                    onBlur={handleWeightBlur}
+                    disabled={readonly || isSaving}
+                  />
+                </div>
               </dd>
             </div>
+            {/* Color: small circles */}
             <div>
-              <dt className="text-slate-800 mb-1">Color</dt>
-              <dd className="flex flex-wrap gap-2 items-center">
+              <dt className="text-xs font-medium text-slate-500 mb-1">Color</dt>
+              <dd className="flex flex-wrap gap-1.5 items-center">
                 {PRESET_COLORS.map(({ label, value }) => (
                   <button
                     key={value}
                     type="button"
-                    className="w-8 h-8 rounded border-2 border-gray-300 hover:border-gray-500 disabled:opacity-50 disabled:pointer-events-none"
-                    style={{ backgroundColor: value }}
+                    className="h-6 w-6 rounded-full border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                    style={{
+                      backgroundColor: value,
+                      ...(displayColor.toLowerCase() === value.toLowerCase()
+                        ? { boxShadow: '0 0 0 2px white, 0 0 0 3px #94a3b8' }
+                        : {}),
+                    }}
                     title={label}
                     onClick={() => handleColorChange(value)}
                     disabled={readonly || isSaving}
+                    aria-pressed={displayColor.toLowerCase() === value.toLowerCase()}
                   />
                 ))}
                 <input
                   type="color"
-                  className="w-8 h-8 cursor-pointer rounded border border-gray-300 disabled:opacity-50 disabled:pointer-events-none"
+                  className="h-6 w-6 rounded-full cursor-pointer border border-slate-200 disabled:pointer-events-none disabled:opacity-50 overflow-hidden"
                   value={displayColor}
                   onChange={(e) => handleColorChange(e.target.value)}
                   disabled={readonly || isSaving}
+                  aria-label="Custom color"
                 />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-slate-800 mb-1">Bag weight (kg)</dt>
-              <dd>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm text-slate-900 placeholder:text-slate-500"
-                  value={weightDisplay}
-                  onChange={handleWeightChange}
-                  onBlur={handleWeightBlur}
-                  disabled={readonly || isSaving}
-                />
-              </dd>
-            </div>
-            <div>
-              <dt className="text-slate-800 mb-1">Locked</dt>
-              <dd>
-                <label className="flex items-center gap-2 text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={draft.locked}
-                    onChange={handleLockedChange}
-                    disabled={readonly || isSaving}
-                  />
-                  <span className="text-sm">Lock position and size</span>
-                </label>
               </dd>
             </div>
 
             {/* Items */}
-            <div className="border-t border-gray-200 pt-3 mt-3">
-              <div className="flex items-center justify-between mb-2">
-                <dt className="text-slate-800 font-medium">Items</dt>
+            <div className="mt-3 border-t border-slate-200 pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <dt className="text-sm font-medium text-slate-900">Items</dt>
                 {isEditMode && (
                   <button
                     type="button"
-                    className="text-xs px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
                     onClick={handleAddItem}
                     disabled={isSaving}
                   >
@@ -612,75 +624,111 @@ export function DetailsPanel({
                   </button>
                 )}
               </div>
-              <dd className="space-y-2">
+              <dd className="space-y-3">
                 {draftItems
                   .filter((i) => !i.isDeleted)
-                  .map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded border border-gray-200 p-2 bg-gray-50/80"
-                    >
-                      <div className="flex gap-1 items-center">
-                        <input
-                          type="text"
-                          className="flex-1 min-w-0 border border-gray-300 rounded px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-500"
-                          placeholder="Name"
-                          maxLength={60}
-                          value={item.name}
-                          onChange={(e) =>
-                            handleUpdateItem(item.id, {
-                              name: e.target.value,
-                            })
-                          }
-                          disabled={readonly || isSaving}
-                        />
-                        {isEditMode && (
+                  .map((item) => {
+                    const isExpanded = isEditMode && expandedItemId === item.id
+                    const isCollapsed = readonly || !isExpanded
+                    const collapsedProps = isEditMode
+                      ? {
+                          role: 'button' as const,
+                          tabIndex: 0,
+                          className:
+                            'rounded-xl border border-slate-200 bg-slate-50/80 py-2 px-3 shadow-sm cursor-pointer',
+                          onClick: () => setExpandedItemId(item.id),
+                          onKeyDown: (e: ReactKeyboardEvent<HTMLDivElement>) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setExpandedItemId(item.id)
+                            }
+                          },
+                        }
+                      : {
+                          className:
+                            'rounded-xl border border-slate-200 bg-slate-50/80 py-2 px-3 shadow-sm',
+                        }
+                    return isCollapsed ? (
+                      <div key={item.id} {...collapsedProps}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-slate-900">
+                            {item.name || 'Untitled'}
+                          </span>
+                          {SHOW_ITEM_WEIGHT && item.weight > 0 && (
+                            <span className="shrink-0 text-xs text-slate-500">
+                              {item.weight} kg
+                            </span>
+                          )}
+                        </div>
+                        {item.description != null &&
+                          item.description.trim() !== '' && (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                              {item.description}
+                            </p>
+                          )}
+                      </div>
+                    ) : (
+                      <div
+                        key={item.id}
+                        className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3 shadow-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                            placeholder="Name"
+                            maxLength={60}
+                            value={item.name}
+                            onChange={(e) =>
+                              handleUpdateItem(item.id, {
+                                name: e.target.value,
+                              })
+                            }
+                            disabled={readonly || isSaving}
+                          />
                           <button
                             type="button"
-                            className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-50"
                             title="Delete item"
-                            onClick={() => handleMarkItemDeleted(item.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMarkItemDeleted(item.id)
+                            }}
                             disabled={isSaving}
                             aria-label="Delete item"
                           >
                             <TrashIcon />
                           </button>
-                        )}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          className="w-20 border border-gray-300 rounded px-2 py-0.5 text-sm text-slate-900 placeholder:text-slate-500"
-                          placeholder="kg"
-                          value={itemWeightDisplayById[item.id] ?? ''}
-                          onChange={(e) =>
-                            setItemWeightDisplayById((prev) => ({
-                              ...prev,
-                              [item.id]: e.target.value,
-                            }))
-                          }
-                          onBlur={() => {
-                            const parsed = normalizeItemWeight(itemWeightDisplayById[item.id] ?? '')
-                            handleUpdateItem(item.id, { weight: parsed })
-                            setItemWeightDisplayById((prev) => ({
-                              ...prev,
-                              [item.id]: parsed === 0 ? '' : String(parsed),
-                            }))
-                          }}
-                          disabled={readonly || isSaving}
-                        />
-                        <span className="text-xs text-slate-600">kg</span>
-                      </div>
-                      {(item.description != null &&
-                        item.description.trim() !== '') && (
-                        <p className="mt-0.5 text-xs text-slate-600 line-clamp-2">
-                          {item.description}
-                        </p>
-                      )}
-                      {isEditMode && (
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                            placeholder="kg"
+                            value={itemWeightDisplayById[item.id] ?? ''}
+                            onChange={(e) =>
+                              setItemWeightDisplayById((prev) => ({
+                                ...prev,
+                                [item.id]: e.target.value,
+                              }))
+                            }
+                            onBlur={() => {
+                              const parsed = normalizeItemWeight(
+                                itemWeightDisplayById[item.id] ?? ''
+                              )
+                              handleUpdateItem(item.id, { weight: parsed })
+                              setItemWeightDisplayById((prev) => ({
+                                ...prev,
+                                [item.id]: parsed === 0 ? '' : String(parsed),
+                              }))
+                            }}
+                            disabled={readonly || isSaving}
+                          />
+                          <span className="text-xs text-slate-500">kg</span>
+                        </div>
                         <textarea
-                          className="mt-1 w-full border border-gray-300 rounded px-2 py-0.5 text-xs min-h-[48px] text-slate-900 placeholder:text-slate-500"
+                          className="min-h-[48px] w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                           placeholder="Description (optional)"
                           value={item.description ?? ''}
                           onChange={(e) =>
@@ -693,25 +741,19 @@ export function DetailsPanel({
                           }
                           disabled={readonly || isSaving}
                         />
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
                 {draftItems.filter((i) => !i.isDeleted).length === 0 && (
                   <p className="text-xs text-slate-600">No items</p>
                 )}
               </dd>
-              <div className="mt-2 text-xs text-slate-700 space-y-0.5">
-                <div>
-                  Items total:{' '}
-                  {formatKg(
-                    draftItems
-                      .filter((i) => !i.isDeleted)
-                      .reduce((s, i) => s + i.weight, 0)
-                  )}
-                </div>
-                <div>
-                  Bag total:{' '}
-                  {formatKg(
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-slate-600">
+                <span>
+                  Items: {draftItems.filter((i) => !i.isDeleted).length}
+                </span>
+                <span>
+                  Bag total: {formatKg(
                     (draft.bag_weight_kg ??
                       bag.bag_weight_kg ??
                       (bag.bag_weight != null ? bag.bag_weight / 1000 : 0)) +
@@ -719,7 +761,7 @@ export function DetailsPanel({
                         .filter((i) => !i.isDeleted)
                         .reduce((s, i) => s + i.weight, 0)
                   )}
-                </div>
+                </span>
               </div>
             </div>
 
@@ -727,7 +769,7 @@ export function DetailsPanel({
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  className="px-3 py-1.5 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleSave}
                   disabled={!canSave}
                 >
@@ -735,7 +777,7 @@ export function DetailsPanel({
                 </button>
                 <button
                   type="button"
-                  className="px-3 py-1.5 text-sm rounded border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:pointer-events-none"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleCancel}
                   disabled={!isDirty || isSaving}
                 >

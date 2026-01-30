@@ -1,6 +1,8 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { PlannerCanvas } from './PlannerCanvas'
+import { PlannerHeader } from './PlannerHeader'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import type { Bag } from '@/types'
 
 interface PlannerPageProps {
@@ -26,18 +28,18 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
 
   if (error || !background) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Not Found</h1>
-          <p className="text-gray-600 mb-4">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Not Found</h1>
+          <p className="text-slate-600 mb-4">
             The background you're looking for doesn't exist or you don't have access to it.
           </p>
-          <a
+          <Link
             href="/dashboard"
-            className="text-blue-600 hover:text-blue-700 underline"
+            className="inline-block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50"
           >
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -68,18 +70,18 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
 
     if (createError || !newPack) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center">
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Error</h1>
-            <p className="text-gray-600 mb-4">
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Error</h1>
+            <p className="text-slate-600 mb-4">
               Failed to initialize pack. Please try again.
             </p>
-            <a
+            <Link
               href="/dashboard"
-              className="text-blue-600 hover:text-blue-700 underline"
+              className="inline-block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50"
             >
               Return to Dashboard
-            </a>
+            </Link>
           </div>
         </div>
       )
@@ -99,18 +101,18 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
 
   if (bagsError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Error</h1>
-          <p className="text-gray-600 mb-4">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Error</h1>
+          <p className="text-slate-600 mb-4">
             Failed to load bags. Please try again.
           </p>
-          <a
+          <Link
             href="/dashboard"
-            className="text-blue-600 hover:text-blue-700 underline"
+            className="inline-block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50"
           >
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -119,17 +121,12 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
   bags = bagsData || []
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {background.name}
-          </h1>
-          <p className="text-gray-600 capitalize">
-            {background.type}
-          </p>
-        </div>
+        <PlannerHeader
+          backgroundId={backgroundId}
+          backgroundName={background.name}
+        />
 
         {/* Canvas */}
         <PlannerCanvas

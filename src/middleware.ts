@@ -38,15 +38,15 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // If user is not logged in and trying to access dashboard, redirect to login
-  if (!user && pathname.startsWith('/dashboard')) {
+  // If user is not logged in and trying to access dashboard or planner, redirect to login
+  if (!user && (pathname.startsWith('/dashboard') || pathname.startsWith('/planner'))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  // If user is logged in and trying to access login or signup, redirect to dashboard
-  if (user && (pathname === '/login' || pathname === '/signup')) {
+  // If user is logged in and trying to access login, signup, or landing, redirect to dashboard
+  if (user && (pathname === '/login' || pathname === '/signup' || pathname === '/')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -58,7 +58,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/dashboard/:path*',
+    '/planner/:path*',
     '/login',
     '/signup',
+    '/',
   ],
 }
