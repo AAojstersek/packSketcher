@@ -5,6 +5,7 @@ import { TemplateGrid } from './TemplateGrid'
 import type { Background } from '@/types'
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import Image from 'next/image'
 
 const LOCAL_TEMPLATES = [
   {
@@ -60,9 +61,16 @@ export default async function DashboardPage() {
           <div>
             <Link
               href="/dashboard"
-              className="text-xl font-semibold text-slate-900 hover:text-slate-700"
+              className="flex items-center gap-2 text-xl font-semibold text-slate-900 hover:text-slate-700"
             >
-              PackSketcher
+              <Image
+                src="/logo/PSlogoBlack.svg"
+                alt=""
+                width={28}
+                height={28}
+                className="shrink-0"
+              />
+              <span>PackSketcher</span>
             </Link>
             <p className="mt-1 text-sm text-slate-600">
               Logged in as <span className="font-medium">{user.email}</span>

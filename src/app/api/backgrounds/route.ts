@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { mapSupabaseError } from '@/lib/supabase/errorMapping'
+import { normalizeName } from '@/lib/validation'
+import { smallestFreeWorkspaceName } from '@/lib/workspaces/naming'
 import type { CreateBackgroundInput } from '@/types'
 
 export async function GET() {
@@ -51,18 +54,39 @@ export async function POST(request: Request) {
     const body: CreateBackgroundInput = await request.json()
     const { name, type, image_url, width, height } = body
 
-    if (!name || !type || !image_url) {
+    const normalizedName = normalizeName(name ?? '')
+
+    if (!normalizedName || !type || !image_url) {
       return NextResponse.json(
         { error: 'Missing required fields: name, type, image_url' },
         { status: 400 }
       )
     }
 
+    // Fetch existing names to enforce smallest free suffix.
+    const { data: existingNames, error: fetchError } = await supabase
+      .from('backgrounds')
+      .select('name')
+      .eq('user_id', user.id)
+
+    if (fetchError) {
+      const mapped = mapSupabaseError(fetchError)
+      return NextResponse.json(
+        { error: mapped.message, code: mapped.code },
+        { status: mapped.code === 'unknown' ? 500 : 400 }
+      )
+    }
+
+    const finalName = smallestFreeWorkspaceName(
+      normalizedName,
+      existingNames?.map((row) => row.name) ?? []
+    )
+
     const { data, error } = await supabase
       .from('backgrounds')
       .insert({
         user_id: user.id,
-        name,
+        name: finalName,
         type,
         image_url,
         width: width ?? 1920,
@@ -73,9 +97,10 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
+      const mapped = mapSupabaseError(error)
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: mapped.message, code: mapped.code },
+        { status: mapped.code === 'unknown' ? 500 : 400 }
       )
     }
 

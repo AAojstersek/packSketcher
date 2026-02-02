@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
     request,
   })
@@ -46,7 +46,13 @@ export async function middleware(request: NextRequest) {
   }
 
   // If user is logged in and trying to access login, signup, or landing, redirect to dashboard
-  if (user && (pathname === '/login' || pathname === '/signup' || pathname === '/')) {
+  if (user && (
+    pathname === '/login' ||
+    pathname === '/signup' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password' ||
+    pathname === '/'
+  )) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
@@ -61,6 +67,8 @@ export const config = {
     '/planner/:path*',
     '/login',
     '/signup',
+    '/forgot-password',
+    '/reset-password',
     '/',
   ],
 }

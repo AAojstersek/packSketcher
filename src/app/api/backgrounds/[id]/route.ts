@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { mapSupabaseError } from '@/lib/supabase/errorMapping'
 
 export async function GET(
   request: Request,
@@ -86,9 +87,10 @@ export async function DELETE(
       .eq('user_id', user.id)
 
     if (error) {
+      const mapped = mapSupabaseError(error)
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: mapped.message, code: mapped.code },
+        { status: mapped.code === 'unknown' ? 500 : 400 }
       )
     }
 

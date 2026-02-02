@@ -35,9 +35,10 @@ export interface Item {
   user_id: string
   name: string
   description: string | null
-  weight: number
+  weight: number | null
   created_at: string
   updated_at: string
+  last_moved_at?: string | null
 }
 
 export interface Bag {
@@ -55,4 +56,22 @@ export interface Bag {
   bag_weight?: number | null
   locked: boolean
   updated_at: string
+  z_index: number
+}
+
+export type ActivityEventType =
+  | 'workspace_renamed'
+  | 'workspace_deleted'
+  | 'box_created'
+  | 'box_deleted'
+  | 'item_created'
+  | 'item_deleted'
+  | 'item_moved'
+
+export interface Activity {
+  id: string
+  user_id: string
+  event_type: ActivityEventType
+  message: string
+  created_at: string
 }

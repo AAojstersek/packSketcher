@@ -26,8 +26,8 @@ function clampName60(value: string): string {
   return value.length > 60 ? value.slice(0, 60) : value
 }
 
-function formatItemWeightDisplay(weight: number): string {
-  return weight === 0 ? '' : String(weight)
+function formatItemWeightDisplay(weight: number | null): string {
+  return weight == null || weight === 0 ? '' : String(weight)
 }
 
 function isNewItemId(id: string): boolean {
@@ -654,7 +654,7 @@ export function DetailsPanel({
                           <span className="truncate text-sm font-semibold text-slate-900">
                             {item.name || 'Untitled'}
                           </span>
-                          {SHOW_ITEM_WEIGHT && item.weight > 0 && (
+                          {SHOW_ITEM_WEIGHT && (item.weight ?? 0) > 0 && (
                             <span className="shrink-0 text-xs text-slate-500">
                               {item.weight} kg
                             </span>
@@ -720,7 +720,8 @@ export function DetailsPanel({
                               handleUpdateItem(item.id, { weight: parsed })
                               setItemWeightDisplayById((prev) => ({
                                 ...prev,
-                                [item.id]: parsed === 0 ? '' : String(parsed),
+                                [item.id]:
+                                  parsed == null || parsed === 0 ? '' : String(parsed),
                               }))
                             }}
                             disabled={readonly || isSaving}
@@ -759,7 +760,7 @@ export function DetailsPanel({
                       (bag.bag_weight != null ? bag.bag_weight / 1000 : 0)) +
                       draftItems
                         .filter((i) => !i.isDeleted)
-                        .reduce((s, i) => s + i.weight, 0)
+                        .reduce((s, i) => s + (i.weight ?? 0), 0)
                   )}
                 </span>
               </div>
