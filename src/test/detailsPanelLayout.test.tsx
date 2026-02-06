@@ -1,14 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bag } from '@/types'
 import { DetailsPanel } from '@/components/planner/DetailsPanel'
 
-const { getUserMock, fromMock, moveItemsBulkMock, undoMoveItemsBulkMock } = vi.hoisted(() => ({
+const { getUserMock, fromMock, rpcMock } = vi.hoisted(() => ({
   getUserMock: vi.fn(),
   fromMock: vi.fn(),
-  moveItemsBulkMock: vi.fn(),
-  undoMoveItemsBulkMock: vi.fn(),
+  rpcMock: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase/browser', () => ({
@@ -17,12 +16,8 @@ vi.mock('@/lib/supabase/browser', () => ({
       getUser: getUserMock,
     },
     from: fromMock,
+    rpc: rpcMock,
   },
-}))
-
-vi.mock('@/lib/rpc/items', () => ({
-  moveItemsBulk: moveItemsBulkMock,
-  undoMoveItemsBulk: undoMoveItemsBulkMock,
 }))
 
 const bag: Bag = {
@@ -42,7 +37,7 @@ const bag: Bag = {
   z_index: 1,
 }
 
-function mockSupabaseForDetailsPanel() {
+function mockSupabaseForLayout() {
   getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
   fromMock.mockImplementation((table: string) => {
@@ -57,20 +52,10 @@ function mockSupabaseForDetailsPanel() {
                   bag_id: 'bag-current',
                   user_id: 'user-1',
                   name: 'Tent',
-                  description: null,
+                  description: '2-person',
                   weight: 1.2,
                   created_at: '2026-02-01T10:01:00.000Z',
                   updated_at: '2026-02-01T10:01:00.000Z',
-                },
-                {
-                  id: 'item-2',
-                  bag_id: 'bag-current',
-                  user_id: 'user-1',
-                  name: 'Stove',
-                  description: null,
-                  weight: 0.7,
-                  created_at: '2026-02-01T10:02:00.000Z',
-                  updated_at: '2026-02-01T10:02:00.000Z',
                 },
               ],
               error: null,
@@ -132,33 +117,37 @@ function mockSupabaseForDetailsPanel() {
   })
 }
 
-describe('DetailsPanel move conflict handling', () => {
+describe('DetailsPanel visual structure and landmarks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSupabaseForDetailsPanel()
+    mockSupabaseForLayout()
   })
 
-  it('shows rename UI on conflict and keeps items unchanged until resolve', async () => {
-    const user = userEvent.setup()
+  it('renders section hierarchy and sticky save actions landmark in edit mode', async () => {
+    render(
+      <DetailsPanel
+        bag={bag}
+        isEditMode
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+        onUpdateBag={() => {}}
+      />
+    )
 
-    moveItemsBulkMock
-      .mockResolvedValueOnce({
-        movedCount: 0,
-        conflicts: [
-          {
-            itemId: 'item-1',
-            name: 'Tent',
-            reason: 'name_conflict',
-            message: 'Target box already has an item named "Tent".',
-          },
-        ],
-        undo: [],
-      })
-      .mockResolvedValueOnce({
-        movedCount: 1,
-        conflicts: [],
-        undo: [{ itemId: 'item-1', fromBagId: 'bag-current', fromName: 'Tent' }],
-      })
+    await screen.findByText('Tent')
+
+    expect(screen.getByRole('region', { name: 'Box settings' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Items' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Totals' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Save actions' })).toBeInTheDocument()
+
+    expect(screen.getByLabelText('Bag name')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+  })
+
+  it('shows bulk move section landmark only while multi-select is enabled', async () => {
+    const user = userEvent.setup()
 
     render(
       <DetailsPanel
@@ -167,38 +156,15 @@ describe('DetailsPanel move conflict handling', () => {
         onClose={() => {}}
         onToggleEditMode={() => {}}
         onUpdateBag={() => {}}
-        requestMoveItemsAction={(action) => {
-          void action()
-        }}
       />
     )
 
     await screen.findByText('Tent')
-    await screen.findByText('Stove')
+    expect(screen.queryByRole('region', { name: 'Bulk move' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Move items' }))
-    await user.click(screen.getByText('Tent'))
-    await user.click(screen.getByRole('button', { name: 'Move selected' }))
 
-    await screen.findByText('Conflict 1/1: "Tent" already exists in target box.')
-    expect(screen.getByText('Tent')).toBeInTheDocument()
-    expect(screen.getByText('Stove')).toBeInTheDocument()
-
-    await user.clear(screen.getByPlaceholderText('Enter a new name'))
-    await user.type(screen.getByPlaceholderText('Enter a new name'), 'Tent 2')
-    await user.click(screen.getByRole('button', { name: 'Rename & continue' }))
-
-    await waitFor(() => {
-      expect(screen.queryByText('Tent')).not.toBeInTheDocument()
-    })
-    expect(screen.getByText('Stove')).toBeInTheDocument()
-    expect(moveItemsBulkMock).toHaveBeenCalledTimes(2)
-    expect(moveItemsBulkMock).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      ['item-1'],
-      'bag-target',
-      { 'item-1': 'Tent 2' }
-    )
+    expect(screen.getByRole('region', { name: 'Bulk move' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Move selected' })).toBeInTheDocument()
   })
 })

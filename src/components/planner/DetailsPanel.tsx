@@ -119,6 +119,11 @@ interface RawWorkspaceTargetRow {
   name?: string
 }
 
+interface RawMoveVerificationRow {
+  id?: string
+  bag_id?: string
+}
+
 interface MoveConflictState {
   selectedIds: string[]
   targetBagId: string
@@ -721,12 +726,34 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           })
           return
         }
-        if (result.movedCount <= 0) {
+        let movedIds = selectedIds
+        let effectiveMovedCount =
+          result.movedCount > 0 ? result.movedCount : result.undo.length
+        if (effectiveMovedCount <= 0) {
+          // Some deployments may return an empty/variant payload even after a successful DB move.
+          // Confirm by checking whether selected items are no longer in the current bag.
+          const { data: verifyRows, error: verifyError } = await supabase
+            .from('items')
+            .select('id,bag_id')
+            .in('id', selectedIds)
+
+          if (!verifyError) {
+            const movedOutIds = ((verifyRows ?? []) as RawMoveVerificationRow[])
+              .filter((row) => typeof row.id === 'string' && row.bag_id !== bag.id)
+              .map((row) => row.id as string)
+
+            if (movedOutIds.length > 0) {
+              movedIds = movedOutIds
+              effectiveMovedCount = movedOutIds.length
+            }
+          }
+        }
+        if (effectiveMovedCount <= 0) {
           setItemsSaveError('No items were moved.')
           return
         }
 
-        const movedSet = new Set(selectedIds)
+        const movedSet = new Set(movedIds)
         setPersistedItems((previous) => previous.filter((item) => !movedSet.has(item.id)))
         setDraftItems((previous) => previous.filter((item) => !movedSet.has(item.id)))
         setItemWeightDisplayById((previous) => {
@@ -742,7 +769,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           if (!previous || !movedSet.has(previous)) return previous
           return null
         })
-        setMoveSuccessMessage(`${result.movedCount} item${result.movedCount === 1 ? '' : 's'} moved.`)
+        setMoveSuccessMessage(`${effectiveMovedCount} item${effectiveMovedCount === 1 ? '' : 's'} moved.`)
         if (moveSuccessTimeoutRef.current) clearTimeout(moveSuccessTimeoutRef.current)
         moveSuccessTimeoutRef.current = setTimeout(() => {
           moveSuccessTimeoutRef.current = null
@@ -750,15 +777,17 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
         }, 1800)
 
         dismissUndoToast()
-        setUndoToast({
-          movedCount: result.movedCount,
-          undoPayload: result.undo,
-          movedSnapshot,
-        })
-        undoToastTimeoutRef.current = setTimeout(() => {
-          undoToastTimeoutRef.current = null
-          setUndoToast(null)
-        }, 10_000)
+        if (result.undo.length > 0) {
+          setUndoToast({
+            movedCount: effectiveMovedCount,
+            undoPayload: result.undo,
+            movedSnapshot,
+          })
+          undoToastTimeoutRef.current = setTimeout(() => {
+            undoToastTimeoutRef.current = null
+            setUndoToast(null)
+          }, 10_000)
+        }
       } catch (e) {
         setItemsSaveError(e instanceof Error ? e.message : 'Failed to move selected items.')
       } finally {
@@ -1043,38 +1072,26 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     isEditMode && bag && draft && isDirty && !isSaving && !validationError
 
   return (
-    <div
-      className="fixed right-0 top-0 h-[100dvh] w-72 z-20 flex flex-col border-l border-slate-200 bg-white shadow-xl"
+    <aside
+      className="fixed right-0 top-0 z-20 flex h-[100dvh] w-[23rem] max-w-[94vw] flex-col border-l border-slate-200 bg-slate-50/95 shadow-2xl backdrop-blur-sm"
       data-details-panel
+      aria-label="Bag details panel"
     >
-      <header className="flex-none p-3 pt-10">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <h3 className="text-sm font-semibold text-slate-900 truncate">Bag details</h3>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={onToggleEditMode}
-            >
-              {isEditMode ? 'Done' : 'Edit'}
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={onClose}
-            >
-              Close
-            </button>
-          </div>
+      <header className="flex-none bg-white/80 px-4 pb-2 pt-2">
+        <div className="space-y-2">
+          {saveSuccessMessage && (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
+              Saved
+            </p>
+          )}
+          {moveSuccessMessage && (
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
+              {moveSuccessMessage}
+            </p>
+          )}
         </div>
-        {saveSuccessMessage && (
-          <div className="mb-2 text-xs text-emerald-600">Saved</div>
-        )}
-        {moveSuccessMessage && (
-          <div className="mb-2 text-xs text-emerald-600">{moveSuccessMessage}</div>
-        )}
         {undoToast && (
-          <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
             <div className="flex items-center justify-between gap-2">
               <span>
                 Moved {undoToast.movedCount} item{undoToast.movedCount === 1 ? '' : 's'}.
@@ -1093,7 +1110,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           </div>
         )}
         {(saveError || validationError || itemsLoadError || itemsSaveError) && (
-          <div className="mb-2 text-xs text-red-600" role="alert">
+          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700" role="alert">
             {validationError ??
               saveError ??
               itemsSaveError ??
@@ -1101,63 +1118,97 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           </div>
         )}
       </header>
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 pt-0">
-        <dl className="space-y-2 text-sm text-slate-700">
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-4 pb-28 pt-1">
         {SHOW_DEBUG && (
-          <>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">id</dt>
-              <dd className="font-mono truncate text-slate-700">{bag?.id ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">pack_id</dt>
-              <dd className="font-mono truncate text-slate-700">{bag?.pack_id ?? '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">x</dt>
-              <dd className="text-slate-700">{bag != null ? bag.x : '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">y</dt>
-              <dd className="text-slate-700">{bag != null ? bag.y : '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">width</dt>
-              <dd className="text-slate-700">{bag != null ? bag.width : '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-slate-900">height</dt>
-              <dd className="text-slate-700">{bag != null ? bag.height : '—'}</dd>
-            </div>
-          </>
+          <section className="rounded-2xl border border-slate-200 bg-white p-3">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Debug
+            </h4>
+            <dl className="space-y-1 text-sm text-slate-700">
+              <div>
+                <dt className="text-xs font-medium text-slate-500">id</dt>
+                <dd className="truncate font-mono text-slate-700">{bag?.id ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-slate-500">pack_id</dt>
+                <dd className="truncate font-mono text-slate-700">{bag?.pack_id ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-slate-500">x</dt>
+                <dd className="text-slate-700">{bag != null ? bag.x : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-slate-500">y</dt>
+                <dd className="text-slate-700">{bag != null ? bag.y : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-slate-500">width</dt>
+                <dd className="text-slate-700">{bag != null ? bag.width : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-slate-500">height</dt>
+                <dd className="text-slate-700">{bag != null ? bag.height : '—'}</dd>
+              </div>
+            </dl>
+          </section>
         )}
 
         {bag != null && draft != null && (
           <>
-            {/* Bag name + weight on one row */}
-            <div>
-              <dt className="sr-only">Bag name and weight</dt>
-              <dd className="flex flex-wrap items-end gap-2">
+            <section
+              role="region"
+              aria-labelledby="details-section-box-settings"
+              className="rounded-2xl border border-slate-200 bg-white p-3.5"
+            >
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h4
+                  id="details-section-box-settings"
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Box settings
+                </h4>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={onToggleEditMode}
+                  >
+                    {isEditMode ? 'Done' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={onClose}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-0 flex-1">
-                  <label htmlFor="details-bag-name" className="block text-xs font-medium text-slate-500 mb-0.5">Bag name</label>
+                  <label htmlFor="details-bag-name" className="mb-1 block text-xs font-medium text-slate-500">
+                    Bag name
+                  </label>
                   <input
                     id="details-bag-name"
                     ref={nameInputRef}
                     type="text"
-                    className="w-full min-w-0 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                    className="w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                     maxLength={60}
                     value={draft.name}
                     onChange={handleNameChange}
                     disabled={readonly || isSaving}
                   />
                 </div>
-                <div className="w-20 shrink-0">
-                  <label htmlFor="details-bag-weight" className="block text-xs font-medium text-slate-500 mb-0.5">kg</label>
+                <div className="w-24 shrink-0">
+                  <label htmlFor="details-bag-weight" className="mb-1 block text-xs font-medium text-slate-500">
+                    kg
+                  </label>
                   <input
                     id="details-bag-weight"
                     type="text"
                     inputMode="decimal"
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                     placeholder="0"
                     value={weightDisplay}
                     onChange={handleWeightChange}
@@ -1165,48 +1216,55 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                     disabled={readonly || isSaving}
                   />
                 </div>
-              </dd>
-            </div>
-            {/* Color: small circles */}
-            <div>
-              <dt className="text-xs font-medium text-slate-500 mb-1">Color</dt>
-              <dd className="flex flex-wrap gap-1.5 items-center">
-                {PRESET_COLORS.map(({ label, value }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className="h-6 w-6 rounded-full border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
-                    style={{
-                      backgroundColor: value,
-                      ...(displayColor.toLowerCase() === value.toLowerCase()
-                        ? { boxShadow: '0 0 0 2px white, 0 0 0 3px #94a3b8' }
-                        : {}),
-                    }}
-                    title={label}
-                    onClick={() => handleColorChange(value)}
+              </div>
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Color</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {PRESET_COLORS.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className="h-7 w-7 rounded-full border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                      style={{
+                        backgroundColor: value,
+                        ...(displayColor.toLowerCase() === value.toLowerCase()
+                          ? { boxShadow: '0 0 0 2px white, 0 0 0 3px #94a3b8' }
+                          : {}),
+                      }}
+                      title={label}
+                      onClick={() => handleColorChange(value)}
+                      disabled={readonly || isSaving}
+                      aria-pressed={displayColor.toLowerCase() === value.toLowerCase()}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    className="h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-slate-200 disabled:pointer-events-none disabled:opacity-50"
+                    value={displayColor}
+                    onChange={(e) => handleColorChange(e.target.value)}
                     disabled={readonly || isSaving}
-                    aria-pressed={displayColor.toLowerCase() === value.toLowerCase()}
+                    aria-label="Custom color"
                   />
-                ))}
-                <input
-                  type="color"
-                  className="h-6 w-6 rounded-full cursor-pointer border border-slate-200 disabled:pointer-events-none disabled:opacity-50 overflow-hidden"
-                  value={displayColor}
-                  onChange={(e) => handleColorChange(e.target.value)}
-                  disabled={readonly || isSaving}
-                  aria-label="Custom color"
-                />
-              </dd>
-            </div>
+                </div>
+              </div>
+            </section>
 
-            {/* Items */}
-            <div className="mt-3 border-t border-slate-200 pt-3">
-              <div className="mb-2 flex items-center justify-between">
-                <dt className="text-sm font-medium text-slate-900">Items</dt>
+            <section
+              role="region"
+              aria-labelledby="details-section-items"
+              className="rounded-2xl border border-slate-200 bg-white p-3.5"
+            >
+              <div className="mb-2.5 flex items-center justify-between gap-2">
+                <h4
+                  id="details-section-items"
+                  className="text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Items
+                </h4>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
+                    className="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
                     onClick={handleToggleMultiSelectMode}
                     disabled={
                       isSaving ||
@@ -1216,12 +1274,12 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                       (!isMultiSelectMode && visibleItems.length === 0)
                     }
                   >
-                    {isMultiSelectMode ? 'Done selecting' : 'Multi-select'}
+                    {isMultiSelectMode ? 'Done moving' : 'Move items'}
                   </button>
                   {isEditMode && (
                     <button
                       type="button"
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
+                      className="rounded-xl border border-slate-900 bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-800 disabled:pointer-events-none disabled:opacity-60"
                       onClick={handleAddItem}
                       disabled={isSaving || isMovingItems || isUndoingMove || isMultiSelectMode || moveConflictState != null}
                     >
@@ -1230,7 +1288,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                   )}
                 </div>
               </div>
-              <dd className="space-y-3">
+              <div className="space-y-3">
                 {visibleItems
                   .map((item) => {
                     const isExpanded = isEditMode && !isMultiSelectMode && expandedItemId === item.id
@@ -1241,7 +1299,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                           role: 'button' as const,
                           tabIndex: 0,
                           className:
-                            `rounded-xl border py-2 px-3 shadow-sm cursor-pointer ${
+                            `cursor-pointer rounded-xl border py-2 px-3 shadow-sm ${
                               isSelectedForMove
                                 ? 'border-slate-500 bg-slate-100'
                                 : 'border-slate-200 bg-slate-50/80'
@@ -1260,7 +1318,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                           role: 'button' as const,
                           tabIndex: 0,
                           className:
-                            'rounded-xl border border-slate-200 bg-slate-50/80 py-2 px-3 shadow-sm cursor-pointer',
+                            'cursor-pointer rounded-xl border border-slate-200 bg-slate-50/80 py-2 px-3 shadow-sm',
                           onClick: () => setExpandedItemId(item.id),
                           onKeyDown: (e: ReactKeyboardEvent<HTMLDivElement>) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -1312,7 +1370,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                         <div className="flex items-center gap-2">
                           <input
                             type="text"
-                            className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                            className="min-w-0 flex-1 rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                             placeholder="Name"
                             maxLength={60}
                             value={item.name}
@@ -1341,7 +1399,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                           <input
                             type="text"
                             inputMode="decimal"
-                            className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                            className="w-20 rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                             placeholder="kg"
                             value={itemWeightDisplayById[item.id] ?? ''}
                             onChange={(e) =>
@@ -1366,7 +1424,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                           <span className="text-xs text-slate-500">kg</span>
                         </div>
                         <textarea
-                          className="min-h-[48px] w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                          className="min-h-[60px] w-full rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                           placeholder="Description (optional)"
                           value={item.description ?? ''}
                           onChange={(e) =>
@@ -1385,9 +1443,22 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                 {visibleItems.length === 0 && (
                   <p className="text-xs text-slate-600">No items</p>
                 )}
-              </dd>
-              {isMultiSelectMode && (
-                <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+              </div>
+            </section>
+
+            {isMultiSelectMode && (
+              <section
+                role="region"
+                aria-labelledby="details-section-bulk-move"
+                className="rounded-2xl border border-slate-200 bg-white p-3.5"
+              >
+                <h4
+                  id="details-section-bulk-move"
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                >
+                  Bulk move
+                </h4>
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
                   <div className="flex items-center justify-between text-xs text-slate-600">
                     <span>Selected: {selectedMoveItemIds.length}</span>
                     {moveTargetsLoadError && (
@@ -1402,7 +1473,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                   <input
                     id="move-target-search"
                     type="text"
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
+                    className="w-full rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-50 disabled:opacity-70"
                     placeholder="Search workspace or box"
                     value={moveTargetQuery}
                     onChange={(event) => setMoveTargetQuery(event.target.value)}
@@ -1434,7 +1505,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                   </div>
                   <button
                     type="button"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full rounded-xl border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleMoveSelected}
                     disabled={
                       isSaving ||
@@ -1490,46 +1561,68 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                     </div>
                   )}
                 </div>
-              )}
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-slate-600">
-                <span>
-                  Items: {totals.itemCount}
-                </span>
-                <span>
-                  Bag total: {formatKg(totals.totalWeightKg)}
-                </span>
-              </div>
-            </div>
-
-            {isEditMode && (
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    void handleSave()
-                  }}
-                  disabled={!canSave || isMovingItems || isUndoingMove || moveConflictState != null}
-                >
-                  {isSaving ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    void handleCancel()
-                  }}
-                  disabled={!isDirty || isSaving || isMovingItems || isUndoingMove || moveConflictState != null}
-                >
-                  Cancel
-                </button>
-              </div>
+              </section>
             )}
+
+            <section
+              role="region"
+              aria-labelledby="details-section-totals"
+              className="rounded-2xl border border-slate-200 bg-white p-3.5"
+            >
+              <h4
+                id="details-section-totals"
+                className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+              >
+                Totals
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-sm text-slate-700">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                  <p className="text-xs text-slate-500">Items</p>
+                  <p className="text-base font-semibold text-slate-900">{totals.itemCount}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                  <p className="text-xs text-slate-500">Bag total</p>
+                  <p className="text-sm font-semibold text-slate-900">{formatKg(totals.totalWeightKg)}</p>
+                </div>
+              </div>
+            </section>
           </>
         )}
-        </dl>
       </div>
-    </div>
+      {isEditMode && (
+        <footer
+          role="region"
+          aria-label="Save actions"
+          className="flex-none border-t border-slate-200 bg-white/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 backdrop-blur-sm"
+        >
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Save actions
+          </h4>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-xl border border-slate-900 bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleSave()
+              }}
+              disabled={!canSave || isMovingItems || isUndoingMove || moveConflictState != null}
+            >
+              {isSaving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleCancel()
+              }}
+              disabled={!isDirty || isSaving || isMovingItems || isUndoingMove || moveConflictState != null}
+            >
+              Cancel
+            </button>
+          </div>
+        </footer>
+      )}
+    </aside>
   )
 })
 

@@ -48,10 +48,11 @@ export async function moveItemsBulk(
   }
 
   const row = extractFirstRow(data)
+  const undo = mapUndo((row as { undo?: unknown } | null)?.undo)
   return {
-    movedCount: row?.moved_count ?? 0,
+    movedCount: extractMovedCount(row, undo),
     conflicts: mapConflicts(row?.conflicts),
-    undo: mapUndo(row?.undo),
+    undo,
   }
 }
 
@@ -87,6 +88,22 @@ function extractFirstRow<T>(data: unknown): T | null {
     return (data[0] as T) ?? null
   }
   return data as T
+}
+
+function extractMovedCount(
+  row: { moved_count?: unknown; movedCount?: unknown; moved?: unknown } | null,
+  undo: MoveItemsBulkUndo[]
+): number {
+  const raw = row?.moved_count ?? row?.movedCount ?? row?.moved
+  const parsed = typeof raw === 'number' ? raw : Number(raw)
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed
+  }
+  // Fallback for older/variant RPC payloads: undo entries imply moved rows.
+  if (undo.length > 0) {
+    return undo.length
+  }
+  return 0
 }
 
 function mapConflicts(conflicts: unknown): MoveItemsBulkConflict[] {

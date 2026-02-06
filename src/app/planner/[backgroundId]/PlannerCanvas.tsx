@@ -64,12 +64,12 @@ function GearIcon() {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -1757,7 +1757,7 @@ export function PlannerCanvas({
           {selectedItem && selectedItemGearAnchor && (
             <button
               type="button"
-              className="absolute z-20 -translate-x-[calc(100%+6px)] translate-y-1 rounded-full border border-slate-200 bg-white p-1.5 text-slate-700 shadow hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="absolute z-20 -translate-x-[calc(100%+6px)] translate-y-1 inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent p-0 text-black transition-colors hover:text-black focus:outline-none focus:ring-2 focus:ring-slate-300"
               style={selectedItemGearAnchor}
               onClick={(event) => {
                 event.preventDefault()

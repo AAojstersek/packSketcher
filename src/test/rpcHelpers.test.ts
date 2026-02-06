@@ -71,6 +71,27 @@ describe('moveItemsBulk helpers', () => {
     expect(result.movedCount).toBe(0)
   })
 
+  it('falls back to undo length when moved_count is missing', async () => {
+    rpcMock.mockResolvedValue({
+      data: {
+        conflicts: [],
+        undo: [
+          { id: '1', from_bag_id: 'bag-a', from_name: 'Pump' },
+          { id: '2', from_bag_id: 'bag-a', from_name: 'Tube' },
+        ],
+      },
+      error: null,
+    })
+
+    const result = await moveItemsBulk(client, ['1', '2'], 'bag-b')
+
+    expect(result.movedCount).toBe(2)
+    expect(result.undo).toEqual([
+      { itemId: '1', fromBagId: 'bag-a', fromName: 'Pump' },
+      { itemId: '2', fromBagId: 'bag-a', fromName: 'Tube' },
+    ])
+  })
+
   it('sends undo payload in expected format and maps response', async () => {
     rpcMock.mockResolvedValue({ data: { moved_count: 2, conflicts: [] }, error: null })
     const undoPayload: MoveItemsBulkUndo[] = [

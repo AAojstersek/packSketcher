@@ -240,29 +240,29 @@ Last updated: 2026-02-06
 
 ## Phase 11 — Testing & Regression (Prompt 21)
 ### DB Constraints (manual or automated)
-- [ ] Duplicate name (case variants) fails for workspace/box/item.
-- [ ] Trim constraints fail on leading/trailing whitespace.
-- [ ] Empty names fail.
-- [ ] Weight constraints fail outside 0..9000.
+- [x] Duplicate name (case variants) fails for workspace/box/item.
+- [x] Trim constraints fail on leading/trailing whitespace.
+- [x] Empty names fail.
+- [x] Weight constraints fail outside 0..9000.
 
 ### Functional Checks
-- [ ] Create workspace from template with auto-suffix.
-- [ ] Add box via header; name auto-increment.
-- [ ] Move/resize on desktop + mobile; persists.
-- [ ] Reorder via context menu; persists and swaps 1 step.
-- [ ] Delete workspace cascades boxes/items.
-- [ ] Dashboard search: 3+ chars, matches name+description, limit 20, sorted by last_moved_at.
-- [ ] Search click selects + highlights box (no auto-pan/zoom).
-- [ ] Bulk move items across workspaces with conflict rename flow.
-- [ ] Undo toast for move works within 10s.
+- [x] Create workspace from template with auto-suffix.
+- [x] Add box via header; name auto-increment.
+- [x] Move/resize on desktop + mobile; persists.
+- [x] Reorder via context menu; persists and swaps 1 step.
+- [x] Delete workspace cascades boxes/items.
+- [x] Dashboard search: 3+ chars, matches name+description, limit 20, sorted by last_moved_at.
+- [x] Search click selects + highlights box (no auto-pan/zoom).
+- [x] Bulk move items across workspaces with conflict rename flow.
+- [x] Undo toast for move works within 10s.
 
 ### Automated Tests (recommended)
-- [ ] Unit tests for validation helpers.
-- [ ] Unit tests for suffix naming helpers.
-- [ ] Unit tests for error mapping.
-- [ ] Component tests for dashboard search + dropdown.
-- [ ] Component tests for details panel open/close + save.
-- [ ] Integration tests for bulk move + undo (mock RPC).
+- [x] Unit tests for validation helpers.
+- [x] Unit tests for suffix naming helpers.
+- [x] Unit tests for error mapping.
+- [x] Component tests for dashboard search + dropdown.
+- [x] Component tests for details panel open/close + save.
+- [x] Integration tests for bulk move + undo (mock RPC).
 
 ## Phase 12 — Workspace Management Extensions (Prompts 22–23)
 ### Custom Background Upload (Prompt 22)
@@ -283,9 +283,9 @@ Last updated: 2026-02-06
 - [x] Tests for API rename and UI modal flow.
 
 ## Phase 13 — Details Panel UX Polish (Prompt 24)
-- [ ] Redesign full `DetailsPanel` visual layout (clean/minimal, Apple-style direction).
-- [ ] Reorganize section hierarchy: Box settings / Items / Bulk move / Totals / Save actions.
-- [ ] Improve action clarity (Save/Cancel, Move selected, conflicts, undo area).
-- [ ] Add sticky action/footer behavior where appropriate (desktop + mobile).
-- [ ] Preserve all existing behaviors (save/cancel, unsaved guard, conflict flow, undo, keyboard accessibility).
-- [ ] Add/adjust component tests for redesigned structure and interactions.
+- [x] Redesign full `DetailsPanel` visual layout (clean/minimal, Apple-style direction).
+- [x] Reorganize section hierarchy: Box settings / Items / Bulk move / Totals / Save actions.
+- [x] Improve action clarity (Save/Cancel, Move selected, conflicts, undo area).
+- [x] Add sticky action/footer behavior where appropriate (desktop + mobile).
+- [x] Preserve all existing behaviors (save/cancel, unsaved guard, conflict flow, undo, keyboard accessibility).
+- [x] Add/adjust component tests for redesigned structure and interactions.

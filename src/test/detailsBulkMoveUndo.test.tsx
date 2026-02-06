@@ -42,13 +42,20 @@ const bag: Bag = {
   z_index: 1,
 }
 
-function mockSupabaseForMoveFlow() {
+function mockSupabaseForMoveFlow(
+  options?: { verifyRows?: Array<{ id: string; bag_id: string }> }
+) {
   getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
+  const verifyRows = options?.verifyRows ?? []
 
   fromMock.mockImplementation((table: string) => {
     if (table === 'items') {
       return {
         select: vi.fn(() => ({
+          in: vi.fn(async () => ({
+            data: verifyRows,
+            error: null,
+          })),
           eq: vi.fn(() => ({
             order: vi.fn(async () => ({
               data: [
@@ -142,7 +149,7 @@ describe('DetailsPanel bulk move + undo integration', () => {
     const user = userEvent.setup()
 
     moveItemsBulkMock.mockResolvedValue({
-      movedCount: 1,
+      movedCount: 0,
       conflicts: [],
       undo: [{ itemId: 'item-1', fromBagId: 'bag-current', fromName: 'Tent' }],
     })
@@ -167,7 +174,7 @@ describe('DetailsPanel bulk move + undo integration', () => {
     await screen.findByText('Tent')
     await screen.findByText('Stove')
 
-    await user.click(screen.getByRole('button', { name: 'Multi-select' }))
+    await user.click(screen.getByRole('button', { name: 'Move items' }))
     await user.click(screen.getByText('Tent'))
     await user.click(screen.getByRole('button', { name: 'Move selected' }))
 
@@ -190,5 +197,43 @@ describe('DetailsPanel bulk move + undo integration', () => {
       expect(screen.getByText('Tent')).toBeInTheDocument()
     })
     expect(screen.getByText('Move undone.')).toBeInTheDocument()
+  })
+
+  it('treats move as success when DB shows item moved but RPC returns no count/undo', async () => {
+    const user = userEvent.setup()
+    mockSupabaseForMoveFlow({
+      verifyRows: [{ id: 'item-1', bag_id: 'bag-target' }],
+    })
+
+    moveItemsBulkMock.mockResolvedValue({
+      movedCount: 0,
+      conflicts: [],
+      undo: [],
+    })
+
+    render(
+      <DetailsPanel
+        bag={bag}
+        isEditMode
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+        onUpdateBag={() => {}}
+        requestMoveItemsAction={(action) => {
+          void action()
+        }}
+      />
+    )
+
+    await screen.findByText('Tent')
+    await user.click(screen.getByRole('button', { name: 'Move items' }))
+    await user.click(screen.getByText('Tent'))
+    await user.click(screen.getByRole('button', { name: 'Move selected' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Tent')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('1 item moved.')).toBeInTheDocument()
+    expect(screen.queryByText('No items were moved.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 })
