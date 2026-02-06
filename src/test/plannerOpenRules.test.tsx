@@ -133,20 +133,20 @@ describe('Planner open/close rules', () => {
     expect(canvas).toBeTruthy()
     fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
 
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
 
     await user.click(screen.getByRole('button', { name: 'Close panel' }))
     await waitFor(() => {
-      expect(screen.queryByText('Bag details')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
 
     const gearButton = await screen.findByRole('button', { name: /Open details for Box 1/i })
     await user.click(gearButton)
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
 
     fireEvent.keyDown(window, { key: 'Escape' })
     await waitFor(() => {
-      expect(screen.queryByText('Bag details')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
   })
 
@@ -160,12 +160,12 @@ describe('Planner open/close rules', () => {
     fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
 
     await waitFor(() => {
-      expect(screen.queryByText('Bag details')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
 
     const gearButton = await screen.findByRole('button', { name: /Open details for Box 1/i })
     await user.click(gearButton)
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
   })
 
   it('keeps panel on current box when selection changes', async () => {
@@ -174,7 +174,7 @@ describe('Planner open/close rules', () => {
     loadPlannerImage()
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
     expect(screen.getByLabelText('Bag name')).toHaveValue('Box 1')
 
     rerender(

@@ -1070,55 +1070,65 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
 
   const canSave =
     isEditMode && bag && draft && isDirty && !isSaving && !validationError
+  const hasInlineFeedback =
+    saveSuccessMessage ||
+    moveSuccessMessage ||
+    undoToast != null ||
+    saveError != null ||
+    validationError != null ||
+    itemsLoadError != null ||
+    itemsSaveError != null
 
   return (
     <aside
-      className="fixed right-0 top-0 z-20 flex h-[100dvh] w-[23rem] max-w-[94vw] flex-col border-l border-slate-200 bg-slate-50/95 shadow-2xl backdrop-blur-sm"
+      className="fixed inset-x-0 bottom-0 z-20 flex h-[92dvh] w-full flex-col rounded-t-2xl border border-b-0 border-slate-200 bg-slate-50/95 shadow-2xl backdrop-blur-sm md:inset-x-auto md:right-0 md:top-0 md:h-[100dvh] md:w-[23rem] md:max-w-[94vw] md:rounded-none md:border-b md:border-l md:border-r-0 md:border-t-0"
       data-details-panel
       aria-label="Bag details panel"
     >
-      <header className="flex-none bg-white/80 px-4 pb-2 pt-2">
-        <div className="space-y-2">
-          {saveSuccessMessage && (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
-              Saved
-            </p>
-          )}
-          {moveSuccessMessage && (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
-              {moveSuccessMessage}
-            </p>
-          )}
-        </div>
-        {undoToast && (
-          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-            <div className="flex items-center justify-between gap-2">
-              <span>
-                Moved {undoToast.movedCount} item{undoToast.movedCount === 1 ? '' : 's'}.
-              </span>
-              <button
-                type="button"
-                className="rounded border border-amber-300 bg-white px-2 py-0.5 font-medium text-amber-900 hover:bg-amber-100 disabled:pointer-events-none disabled:opacity-60"
-                onClick={() => {
-                  void handleUndoMove()
-                }}
-                disabled={isUndoingMove || isMovingItems}
-              >
-                {isUndoingMove ? 'Undoing…' : 'Undo'}
-              </button>
+      {hasInlineFeedback && (
+        <header className="flex-none bg-white/80 px-3 pb-1.5 pt-1.5 md:px-4 md:pb-2 md:pt-2">
+          <div className="space-y-2">
+            {saveSuccessMessage && (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
+                Saved
+              </p>
+            )}
+            {moveSuccessMessage && (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700">
+                {moveSuccessMessage}
+              </p>
+            )}
+          </div>
+          {undoToast && (
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  Moved {undoToast.movedCount} item{undoToast.movedCount === 1 ? '' : 's'}.
+                </span>
+                <button
+                  type="button"
+                  className="rounded border border-amber-300 bg-white px-2 py-0.5 font-medium text-amber-900 hover:bg-amber-100 disabled:pointer-events-none disabled:opacity-60"
+                  onClick={() => {
+                    void handleUndoMove()
+                  }}
+                  disabled={isUndoingMove || isMovingItems}
+                >
+                  {isUndoingMove ? 'Undoing…' : 'Undo'}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-        {(saveError || validationError || itemsLoadError || itemsSaveError) && (
-          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700" role="alert">
-            {validationError ??
-              saveError ??
-              itemsSaveError ??
-              itemsLoadError}
-          </div>
-        )}
-      </header>
-      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-4 pb-28 pt-1">
+          )}
+          {(saveError || validationError || itemsLoadError || itemsSaveError) && (
+            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700" role="alert">
+              {validationError ??
+                saveError ??
+                itemsSaveError ??
+                itemsLoadError}
+            </div>
+          )}
+        </header>
+      )}
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 pb-24 pt-0.5 md:px-4 md:pb-28 md:pt-1">
         {SHOW_DEBUG && (
           <section className="rounded-2xl border border-slate-200 bg-white p-3">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">

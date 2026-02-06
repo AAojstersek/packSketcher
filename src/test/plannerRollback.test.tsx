@@ -189,7 +189,7 @@ describe('Planner optimistic rollback', () => {
 
     loadPlannerImage()
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
 
     const canvas = container.querySelector('canvas')
     expect(canvas).toBeTruthy()

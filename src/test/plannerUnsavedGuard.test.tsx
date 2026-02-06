@@ -150,27 +150,27 @@ describe('Planner unsaved changes guard', () => {
     loadPlannerImage()
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
 
     await user.clear(screen.getByLabelText('Bag name'))
     await user.type(screen.getByLabelText('Bag name'), 'Changed Box')
 
     await user.click(screen.getByRole('button', { name: 'Close panel' }))
     const guardDialog = await screen.findByRole('dialog', { name: 'Unsaved changes' })
-    expect(screen.getByText('Bag details')).toBeInTheDocument()
+    expect(screen.getByLabelText('Bag details panel')).toBeInTheDocument()
 
     await user.click(within(guardDialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument()
     })
-    expect(screen.getByText('Bag details')).toBeInTheDocument()
+    expect(screen.getByLabelText('Bag details panel')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Close panel' }))
     const discardDialog = await screen.findByRole('dialog', { name: 'Unsaved changes' })
     await user.click(within(discardDialog).getByRole('button', { name: 'Discard' }))
 
     await waitFor(() => {
-      expect(screen.queryByText('Bag details')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
   })
 
@@ -185,7 +185,7 @@ describe('Planner unsaved changes guard', () => {
     loadPlannerImage()
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
     await user.type(screen.getByLabelText('Bag name'), ' dirty')
 
     expect(registeredHandler).toBeTypeOf('function')
@@ -219,7 +219,7 @@ describe('Planner unsaved changes guard', () => {
     loadPlannerImage()
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByText('Bag details')
+    await screen.findByLabelText('Bag details panel')
     await user.type(screen.getByLabelText('Bag name'), ' dirty')
 
     expect(registeredMoveHandler).toBeTypeOf('function')
