@@ -1,16 +1,19 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
-import { PlannerCanvas } from './PlannerCanvas'
-import { PlannerHeader } from './PlannerHeader'
+import { PlannerShell } from './PlannerShell'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Bag } from '@/types'
 
 interface PlannerPageProps {
   params: Promise<{ backgroundId: string }>
+  searchParams?: Promise<{ bagId?: string | string[] }>
 }
 
-export default async function PlannerPage({ params }: PlannerPageProps) {
+export default async function PlannerPage({ params, searchParams }: PlannerPageProps) {
   const { backgroundId } = await params
+  const resolvedSearchParams = searchParams ? await searchParams : undefined
+  const bagIdParam = resolvedSearchParams?.bagId
+  const initialHighlightBagId = Array.isArray(bagIdParam) ? (bagIdParam[0] ?? null) : (bagIdParam ?? null)
   const supabase = await createSupabaseServerClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
@@ -123,17 +126,13 @@ export default async function PlannerPage({ params }: PlannerPageProps) {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <PlannerHeader
+        <PlannerShell
           backgroundId={backgroundId}
           backgroundName={background.name}
-        />
-
-        {/* Canvas */}
-        <PlannerCanvas
           imageUrl={background.image_url}
-          name={background.name}
           packId={packId}
           bags={bags}
+          initialHighlightBagId={initialHighlightBagId}
         />
       </div>
     </div>

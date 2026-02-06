@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapSupabaseError } from '@/lib/supabase/errorMapping'
+import { friendlySupabaseMessage, mapSupabaseError } from '@/lib/supabase/errorMapping'
 
 function supabaseError(
   code: string,
@@ -54,5 +54,21 @@ describe('mapSupabaseError', () => {
 
     const withDetails = { code: '23514', details: 'violates check constraint "name_not_empty_check"' }
     expect(mapSupabaseError(withDetails).code).toBe('name_empty')
+  })
+})
+
+describe('friendlySupabaseMessage', () => {
+  it('returns mapped friendly message for known DB errors', () => {
+    const err = supabaseError('23505', 'items_bag_id_name_key')
+    expect(friendlySupabaseMessage(err, 'fallback')).toBe('Item name is already in use')
+  })
+
+  it('returns raw message for unknown errors', () => {
+    const err = { code: 'XX000', message: 'Database is restarting' }
+    expect(friendlySupabaseMessage(err, 'fallback')).toBe('Database is restarting')
+  })
+
+  it('returns fallback when there is no mapped or raw message', () => {
+    expect(friendlySupabaseMessage({ code: 'XX000' }, 'fallback')).toBe('fallback')
   })
 })

@@ -45,9 +45,18 @@ function TrashIcon() {
 interface PlannerHeaderProps {
   backgroundId: string
   backgroundName: string
+  isEditMode: boolean
+  onToggleEditMode: () => void
+  onAddBag: () => void
 }
 
-export function PlannerHeader({ backgroundId, backgroundName }: PlannerHeaderProps) {
+export function PlannerHeader({
+  backgroundId,
+  backgroundName,
+  isEditMode,
+  onToggleEditMode,
+  onAddBag,
+}: PlannerHeaderProps) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -93,6 +102,22 @@ export function PlannerHeader({ backgroundId, backgroundName }: PlannerHeaderPro
             {deleteError}
           </p>
         )}
+        {isEditMode && (
+          <button
+            type="button"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50"
+            onClick={onAddBag}
+          >
+            + Add box
+          </button>
+        )}
+        <button
+          type="button"
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50"
+          onClick={onToggleEditMode}
+        >
+          {isEditMode ? 'Done' : 'Edit'}
+        </button>
         <button
           type="button"
           className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-50"

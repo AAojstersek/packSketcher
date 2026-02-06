@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description: "Visual packing planner for bags and gear",
   icons: {
     icon: [
-      { url: "/logo/PSlogoBlack.svg", type: "image/svg+xml" },
+      { url: "/logo/PSlogoWhite.svg", type: "image/svg+xml" },
     ],
   },
 };

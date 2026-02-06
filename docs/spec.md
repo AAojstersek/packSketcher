@@ -1,20 +1,24 @@
 \# PackSketcher (MVP) — Developer-Ready Specification
 
-Last updated: 2026-02-01
+Last updated: 2026-02-06
 
 ## 1) Goal + Scope
 Build a responsive web app (desktop + mobile) that lets authenticated users visually plan where **Boxes** go on a **Workspace** (background image), then manage **Items** inside each Box, including:
 - Global item search across all workspaces
 - Bulk moving items between boxes across workspaces (with conflict handling + undo)
 - Minimal activity feed
+- Custom background upload + workspace rename on dashboard
 
 Out of scope for MVP:
 - Subscriptions/membership
 - Export/print
-- Upload custom backgrounds
 - Public sharing
 
 UI language: English.
+
+Extension track (planned next phases):
+- Phase 12: custom background upload and workspace rename.
+- Phase 13: full visual redesign of details panel (clean/minimal, Apple-style).
 
 ## 2) Terminology
 - **Workspace**: a background “board” the user works on (DB: `backgrounds` + its `packs` row).
@@ -81,10 +85,22 @@ Redirect URL must be configurable via env (e.g. `NEXT_PUBLIC_SITE_URL`) to work 
 ## 6) Dashboard
 ### 6.1 Workspaces
 - Multiple workspaces per user.
-- Created from templates only.
+- Created from templates and custom uploads.
 - Workspace name is visible; type is not shown (type still stored in DB).
 - Workspace names must be unique per user (case-insensitive, trimmed).
 - Creating from template auto-suffixes: `Motorcycle (2)`, `Motorcycle (3)`, using the smallest free number.
+
+Custom background upload:
+- Triggered from dashboard (“Upload Custom Background”).
+- Uses file upload (`image/png`, `image/jpeg`, `image/webp`, default max 10MB).
+- Client reads image dimensions before submit.
+- Created workspace uses `type = custom` and stores `image_url`, `width`, `height`.
+
+Rename workspace:
+- Triggered from dashboard card modal.
+- Save/Cancel flow with prefilled current name.
+- Same trim/non-empty/max-60/case-insensitive-unique rules as all workspace names.
+- Friendly mapped DB errors are shown inline.
 
 Delete workspace:
 - Only from dashboard card.
@@ -198,6 +214,13 @@ If there are unsaved changes and user attempts to:
 
 Show modal with: Cancel / Save / Discard.
 
+### 8.4 Visual Design Direction (Phase 13)
+- Whole details panel is redesigned with a clean/minimal visual system (Apple-style direction).
+- Clear hierarchy for: Box settings, Items, Bulk move, Totals, Save actions.
+- Improve spacing/grouping/typography and action prioritization.
+- Keep all current behavior and keyboard/accessibility interaction rules unchanged.
+- Maintain mobile-first readability and tap-target quality.
+
 ## 9) Items
 Validation:
 - Name required, max 60, unique per box (case-insensitive, trimmed).
@@ -278,6 +301,8 @@ DB verification:
 
 Functional checks:
 - Create workspaces from templates with auto-suffix.
+- Upload custom background from dashboard and open it in planner.
+- Rename workspace from dashboard card and persist after refresh.
 - Add box via header; name auto-increment.
 - Move/resize on desktop + mobile; persists.
 - Reorder via context menu; persists and swaps 1 step.
@@ -285,3 +310,15 @@ Functional checks:
 - Dashboard search: 3+ chars, matches name+description, limit 20, sorted by last_moved_at; click selects+highlights box.
 - Bulk move items across workspaces with conflict rename flow.
 - Undo toast for move works within 10s.
+- Details panel redesign keeps save/cancel, unsaved guard, conflict flow, and undo behavior intact.
+
+## 16) Acceptance Criteria (Extension Track)
+Phase 12 (upload + rename):
+- User can upload a supported image file, create a `custom` workspace, and see it in dashboard list without manual reload.
+- Uploaded workspace opens in planner with correct background dimensions.
+- User can rename workspace from card modal; uniqueness/validation errors are friendly and actionable.
+
+Phase 13 (details panel redesign):
+- New visual layout improves clarity without changing business behavior.
+- Existing interaction test scenarios continue to pass (open/close, save/cancel, unsaved guard, move conflicts, undo).
+- Desktop and mobile layouts remain usable and readable.

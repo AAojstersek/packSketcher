@@ -10,6 +10,10 @@ interface CreateFromTemplateButtonProps {
   imageUrl: string
 }
 
+function notifyActivitiesRefresh() {
+  window.dispatchEvent(new Event('packsketcher:activities-refresh'))
+}
+
 export function CreateFromTemplateButton({
   name,
   type,
@@ -38,15 +42,25 @@ export function CreateFromTemplateButton({
         }),
       })
 
+      const data = await response.json().catch(() => null)
+
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Failed to create background')
+        const errorFromPayload =
+          data && typeof data === 'object' && 'error' in data
+            ? (data as { error?: unknown }).error
+            : null
+        const message = typeof errorFromPayload === 'string'
+          ? errorFromPayload
+          : 'Failed to create workspace. Please try again.'
+        setError(message)
+        return
       }
 
-      // Refresh the dashboard to show the new background
+      // API returns finalized name/id; we rely on server for suffix logic and simply refresh list.
+      notifyActivitiesRefresh()
       router.refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch {
+      setError('Failed to create workspace. Please try again.')
     } finally {
       setLoading(false)
     }

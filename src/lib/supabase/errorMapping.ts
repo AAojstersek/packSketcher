@@ -19,10 +19,16 @@ export interface MappedError {
  */
 export function mapSupabaseError(err: unknown): MappedError {
   const fallback: MappedError = { code: 'unknown', message: 'Something went wrong' }
-  const error = err as { code?: string; message?: string; hint?: string; details?: string }
+  const error = err as {
+    code?: string
+    message?: string
+    hint?: string
+    details?: string
+    constraint?: string
+  }
 
   const constraint =
-    (error as any)?.constraint ||
+    error.constraint ||
     extractConstraintFromDetails(error.details) ||
     extractConstraintFromMessage(error.message)
 
@@ -58,6 +64,23 @@ export function mapSupabaseError(err: unknown): MappedError {
     }
   }
 
+  return fallback
+}
+
+/**
+ * Return a user-facing message from a Supabase/Postgres error.
+ * Uses mapped friendly messages for known DB constraint errors, then falls back
+ * to the raw error message, and finally to the provided fallback.
+ */
+export function friendlySupabaseMessage(err: unknown, fallback: string): string {
+  const mapped = mapSupabaseError(err)
+  if (mapped.code !== 'unknown') {
+    return mapped.message
+  }
+  const raw = (err as { message?: unknown } | null | undefined)?.message
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return raw
+  }
   return fallback
 }
 

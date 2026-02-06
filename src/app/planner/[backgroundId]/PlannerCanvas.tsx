@@ -1,9 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bag } from '@/types'
 import { supabase } from '@/lib/supabase/browser'
-import { DetailsPanel } from '@/components/planner/DetailsPanel'
+import { friendlySupabaseMessage } from '@/lib/supabase/errorMapping'
+import { DetailsPanel, type DetailsPanelHandle } from '@/components/planner/DetailsPanel'
+import { nextBoxName } from '@/lib/boxes/naming'
+import { formatBoxLabel } from '@/lib/boxes/labels'
+import { swapBagZIndex, type SwapDirection } from '@/lib/rpc/bags'
+import { reorderBagsOneStep } from '@/lib/boxes/reorder'
+import { shouldPromptUnsavedGuard, type UnsavedGuardAction } from '@/lib/planner/unsavedGuard'
 
 // Survives remounts (Strict Mode / fast refresh) so we don't overwrite localItems after resize/drag.
 let lastSyncedPackId: string | null = null
@@ -28,14 +34,87 @@ function hexToRgb(hex: string): [number, number, number] {
   return [128, 128, 128]
 }
 
+function getRenderOrderedItems(items: Bag[]): Bag[] {
+  return [...items].sort((a, b) => {
+    if (a.z_index !== b.z_index) {
+      return a.z_index - b.z_index
+    }
+    if (a.created_at !== b.created_at) {
+      return a.created_at.localeCompare(b.created_at)
+    }
+    return a.id.localeCompare(b.id)
+  })
+}
+
+const LONG_PRESS_MS = 550
+const LONG_PRESS_MOVE_TOLERANCE = 10
+
+function getTouchDistance(a: Touch, b: Touch): number {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+}
+
+function getTouchCenter(a: Touch, b: Touch): { x: number; y: number } {
+  return {
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  }
+}
+
+function GearIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" />
+      <path d="m19.4 15 .8 1.4-1.7 3-1.6-.2a8.2 8.2 0 0 1-2 1.2L14.5 22h-5l-.4-1.6a8.2 8.2 0 0 1-2-1.2l-1.6.2-1.7-3 .8-1.4a8.6 8.6 0 0 1 0-2L3.8 11l1.7-3 1.6.2a8.2 8.2 0 0 1 2-1.2L9.5 5h5l.4 1.6a8.2 8.2 0 0 1 2 1.2l1.6-.2 1.7 3-.8 1.4a8.6 8.6 0 0 1 0 2Z" />
+    </svg>
+  )
+}
+
 interface PlannerCanvasProps {
   imageUrl: string
   name: string
   packId: string
   bags: Bag[]
+  isEditMode: boolean
+  selectedBagId: string | null
+  highlightBagId: string | null
+  onToggleEditMode: () => void
+  onSelectBagId: (bagId: string | null) => void
+  onHighlightBagIdChange: (bagId: string | null) => void
+  addBagRequestId: number
+  onOpenDetails: (bagId: string | null) => void
+  onRegisterToggleEditModeHandler?: (handler: (() => void) | null) => void
+  onRegisterMoveItemsGuardHandler?: (
+    handler: ((action: () => Promise<void> | void) => void) | null
+  ) => void
 }
 
-export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasProps) {
+export function PlannerCanvas({
+  imageUrl,
+  name,
+  packId,
+  bags,
+  isEditMode,
+  selectedBagId,
+  highlightBagId,
+  onToggleEditMode,
+  onSelectBagId,
+  onHighlightBagIdChange,
+  addBagRequestId,
+  onOpenDetails,
+  onRegisterToggleEditModeHandler,
+  onRegisterMoveItemsGuardHandler,
+}: PlannerCanvasProps) {
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -46,7 +125,6 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
   const [userId, setUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null)
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [dragItemId, setDragItemId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 })
@@ -55,6 +133,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
   const dragItemIdRef = useRef<string | null>(null)
   const draggedItemCurrentRef = useRef<Bag | null>(null)
   const selectedItemIdRef = useRef<string | null>(null)
+  const highlightBagIdRef = useRef<string | null>(null)
   const localItemsRef = useRef<Bag[]>(localItems)
   const [isResizing, setIsResizing] = useState(false)
   const [resizeHandle, setResizeHandle] = useState<'tl' | 'tr' | 'bl' | 'br' | null>(null)
@@ -82,15 +161,54 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
   const spacePressedRef = useRef(false)
   const panStartRef = useRef({ x: 0, y: 0 })
   const panStartOffsetRef = useRef({ x: 0, y: 0 })
-  const [isEditMode, setIsEditMode] = useState(false)
   const isEditModeRef = useRef(false)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const isDetailsOpenRef = useRef(false)
   const [detailsItemId, setDetailsItemId] = useState<string | null>(null)
   const [detailsSaveError, setDetailsSaveError] = useState<string | null>(null)
+  const [isCoarsePointer, setIsCoarsePointer] = useState(false)
+  const detailsPanelRef = useRef<DetailsPanelHandle | null>(null)
+  const [isUnsavedGuardOpen, setIsUnsavedGuardOpen] = useState(false)
+  const [unsavedGuardBusyAction, setUnsavedGuardBusyAction] = useState<'save' | 'discard' | null>(null)
+  const pendingGuardActionRef = useRef<(() => Promise<void> | void) | null>(null)
+  const pendingNavigationHrefRef = useRef<string | null>(null)
+  const requestGuardedActionRef = useRef<
+    (
+      action: () => Promise<void> | void,
+      actionType: UnsavedGuardAction,
+      options?: { navigationHref?: string }
+    ) => void
+  >(() => {})
+  const handledAddBagRequestRef = useRef(0)
+  const [contextMenu, setContextMenu] = useState<{
+    bagId: string
+    x: number
+    y: number
+  } | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
+  const longPressTimerRef = useRef<number | null>(null)
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null)
+  const suppressNextClickRef = useRef(false)
+  const touchDragStateRef = useRef<{
+    bagId: string
+    dx: number
+    dy: number
+    started: boolean
+  } | null>(null)
+  const pinchStateRef = useRef<{
+    startDistance: number
+    startScale: number
+    anchorWorldX: number
+    anchorWorldY: number
+  } | null>(null)
 
   const detailsItem =
     detailsItemId != null ? localItems.find((i) => i.id === detailsItemId) ?? null : null
+  const selectedItemId = selectedBagId
+  const setSelectedItemId = onSelectBagId
+  const selectedItem = selectedItemId
+    ? localItems.find((item) => item.id === selectedItemId) ?? null
+    : null
 
   const MIN_ZOOM = 0.25
   const MAX_ZOOM = 2.5
@@ -100,6 +218,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
 
   dragItemIdRef.current = dragItemId
   selectedItemIdRef.current = selectedItemId
+  highlightBagIdRef.current = highlightBagId
   localItemsRef.current = localItems
   resizeHandleRef.current = resizeHandle
   scaleRef.current = scale
@@ -156,7 +275,9 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
     if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0 || itemsList.length === 0) return null
     const scaleX = canvas.width / imageNaturalWidth
     const scaleY = canvas.height / imageNaturalHeight
-    for (const item of [...itemsList].reverse()) {
+    const orderedItems = getRenderOrderedItems(itemsList)
+    for (let index = orderedItems.length - 1; index >= 0; index -= 1) {
+      const item = orderedItems[index]
       const itemX = item.x * scaleX
       const itemY = item.y * scaleY
       const itemWidth = item.width * scaleX
@@ -220,20 +341,21 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
       const scaleX = canvas.width / imageNaturalWidth
       const scaleY = canvas.height / imageNaturalHeight
 
-      // Draw items using scaled coordinates and bag.color
-      itemsToDraw.forEach((item) => {
+      // Draw items using scaled coordinates and bag.color, lowest z-index first.
+      getRenderOrderedItems(itemsToDraw).forEach((item) => {
         const itemX = item.x * scaleX
         const itemY = item.y * scaleY
         const itemWidth = item.width * scaleX
         const itemHeight = item.height * scaleY
         const [r, g, b] = hexToRgb(item.color ?? '#888888')
         const isSelected = item.id === selectedItemId
+        const isHighlighted = !isSelected && highlightBagId != null && item.id === highlightBagId
         const isHovered = item.id === hoveredItemId
 
         // Subtle outer stroke for selected (glow)
-        if (isSelected) {
+        if (isSelected || isHighlighted) {
           ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.2)`
-          ctx.lineWidth = 5
+          ctx.lineWidth = isSelected ? 5 : 3
           ctx.strokeRect(itemX - 2, itemY - 2, itemWidth + 4, itemHeight + 4)
         }
 
@@ -242,10 +364,38 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
         ctx.fillRect(itemX, itemY, itemWidth, itemHeight)
 
         // Border: bag color, higher alpha; thickness by state
-        const strokeAlpha = isSelected ? 0.8 : 0.65
+        const strokeAlpha = isSelected || isHighlighted ? 0.8 : 0.65
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${strokeAlpha})`
         ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2 : 1.5
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
+
+        // Box label in top-left; truncate or hide when space is too small.
+        const labelPaddingX = 6
+        const labelPaddingY = 4
+        const labelFontSize = 12
+        const labelHeight = labelFontSize + 4
+        const maxLabelWidth = itemWidth - labelPaddingX * 2
+        const maxLabelHeight = itemHeight - labelPaddingY * 2
+        if (maxLabelWidth > 0 && maxLabelHeight >= labelHeight) {
+          ctx.font = `600 ${labelFontSize}px ui-sans-serif, system-ui, sans-serif`
+          ctx.textBaseline = 'top'
+          const label = formatBoxLabel(
+            item.name,
+            maxLabelWidth,
+            (value) => ctx.measureText(value).width
+          )
+          if (label) {
+            const textWidth = ctx.measureText(label).width
+            const bgX = itemX + labelPaddingX - 2
+            const bgY = itemY + labelPaddingY - 1
+            const bgWidth = textWidth + 4
+            const bgHeight = labelHeight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+            ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+            ctx.fillText(label, itemX + labelPaddingX, itemY + labelPaddingY)
+          }
+        }
 
         // Corner handles when selected (bag color, high alpha)
         if (isSelected) {
@@ -320,7 +470,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, isDragging, isResizing, scale, offsetX, offsetY])
+  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, highlightBagId, isDragging, isResizing, scale, offsetX, offsetY])
 
   // Fetch and cache user ID on mount
   useEffect(() => {
@@ -359,6 +509,185 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
     return isTypingTarget(e.target) || isTypingTarget(document.activeElement)
   }
 
+  function showTemporaryError(message: string) {
+    setError(message)
+    window.setTimeout(() => setError(null), 5000)
+  }
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    longPressStartRef.current = null
+  }
+
+  const openDetailsForBag = (bagId: string) => {
+    setDetailsItemId(bagId)
+    setIsDetailsOpen(true)
+    setDetailsSaveError(null)
+    onOpenDetails(bagId)
+  }
+
+  const hasUnsavedDetailsChanges = useCallback(() => {
+    if (!isDetailsOpenRef.current) return false
+    return detailsPanelRef.current?.hasUnsavedChanges() ?? false
+  }, [])
+
+  const closeDetailsImmediately = useCallback(() => {
+    setIsDetailsOpen(false)
+    setDetailsItemId(null)
+    setDetailsSaveError(null)
+    onOpenDetails(null)
+  }, [onOpenDetails])
+
+  const clearPendingGuardAction = useCallback(() => {
+    pendingGuardActionRef.current = null
+    pendingNavigationHrefRef.current = null
+    setUnsavedGuardBusyAction(null)
+    setIsUnsavedGuardOpen(false)
+  }, [])
+
+  const runPendingGuardAction = useCallback(async () => {
+    const pendingAction = pendingGuardActionRef.current
+    const pendingNavigationHref = pendingNavigationHrefRef.current
+    clearPendingGuardAction()
+    if (pendingAction) {
+      await pendingAction()
+      return
+    }
+    if (pendingNavigationHref) {
+      window.location.assign(pendingNavigationHref)
+    }
+  }, [clearPendingGuardAction])
+
+  const requestGuardedAction = useCallback(
+    (
+      action: () => Promise<void> | void,
+      actionType: UnsavedGuardAction,
+      options?: { navigationHref?: string }
+    ) => {
+      const shouldGuard = shouldPromptUnsavedGuard(actionType, {
+        isDetailsPanelOpen: isDetailsOpenRef.current,
+        hasUnsavedChanges: hasUnsavedDetailsChanges(),
+      })
+      if (!shouldGuard) {
+        void action()
+        return
+      }
+      pendingGuardActionRef.current = action
+      pendingNavigationHrefRef.current = options?.navigationHref ?? null
+      setUnsavedGuardBusyAction(null)
+      setIsUnsavedGuardOpen(true)
+    },
+    [hasUnsavedDetailsChanges]
+  )
+  requestGuardedActionRef.current = requestGuardedAction
+
+  const handleUnsavedGuardCancel = useCallback(() => {
+    clearPendingGuardAction()
+  }, [clearPendingGuardAction])
+
+  const handleUnsavedGuardSave = useCallback(async () => {
+    const panel = detailsPanelRef.current
+    if (!panel) {
+      await runPendingGuardAction()
+      return
+    }
+    setUnsavedGuardBusyAction('save')
+    const saved = await panel.saveChanges()
+    if (!saved) {
+      setUnsavedGuardBusyAction(null)
+      return
+    }
+    await runPendingGuardAction()
+  }, [runPendingGuardAction])
+
+  const handleUnsavedGuardDiscard = useCallback(async () => {
+    const panel = detailsPanelRef.current
+    if (!panel) {
+      await runPendingGuardAction()
+      return
+    }
+    setUnsavedGuardBusyAction('discard')
+    const discarded = await panel.discardChanges()
+    if (!discarded) {
+      setUnsavedGuardBusyAction(null)
+      return
+    }
+    await runPendingGuardAction()
+  }, [runPendingGuardAction])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+
+    const media = window.matchMedia('(pointer: coarse)')
+    const apply = () => setIsCoarsePointer(media.matches)
+    apply()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', apply)
+      return () => media.removeEventListener('change', apply)
+    }
+
+    media.addListener(apply)
+    return () => media.removeListener(apply)
+  }, [])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const shouldGuard = shouldPromptUnsavedGuard('navigate_away', {
+        isDetailsPanelOpen: isDetailsOpenRef.current,
+        hasUnsavedChanges: hasUnsavedDetailsChanges(),
+      })
+      if (!shouldGuard) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedDetailsChanges])
+
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented) return
+      if (event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+      const target = event.target as HTMLElement | null
+      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null
+      if (!anchor) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (anchor.hasAttribute('download')) return
+
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
+
+      const currentUrl = new URL(window.location.href)
+      const nextUrl = new URL(anchor.href, window.location.href)
+      if (nextUrl.href === currentUrl.href) return
+
+      const shouldGuard = shouldPromptUnsavedGuard('navigate_away', {
+        isDetailsPanelOpen: isDetailsOpenRef.current,
+        hasUnsavedChanges: hasUnsavedDetailsChanges(),
+      })
+      if (!shouldGuard) return
+
+      event.preventDefault()
+      requestGuardedAction(
+        () => {
+          window.location.assign(nextUrl.href)
+        },
+        'navigate_away',
+        { navigationHref: nextUrl.href }
+      )
+    }
+
+    document.addEventListener('click', handleDocumentClick, true)
+    return () => document.removeEventListener('click', handleDocumentClick, true)
+  }, [hasUnsavedDetailsChanges, requestGuardedAction])
+
   /** True when focus is in an input/textarea/contentEditable — do not capture Space. */
   function isTypingActive(): boolean {
     const el = document.activeElement
@@ -384,18 +713,39 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
       const item = items.find((i) => i.id === id)
       if (!item) return
       if (item.locked) return
-      setLocalItems((prev) => prev.filter((i) => i.id !== id))
-      setSelectedItemId(null)
-      const { error: deleteError } = await supabase.from('bags').delete().eq('id', id)
-      if (deleteError) {
-        setLocalItems((prev) => [...prev, item])
-        setError(deleteError.message ?? 'Failed to delete bag.')
-        setTimeout(() => setError(null), 5000)
-      }
+      const previousItems = items
+      const previousSelectedId = selectedItemIdRef.current
+      const previousHighlightId = highlightBagIdRef.current
+      const previousDetailsItemId = detailsItemId
+      const wasDetailsOpenForItem =
+        isDetailsOpenRef.current && previousDetailsItemId != null && previousDetailsItemId === id
+      requestGuardedActionRef.current(async () => {
+        setLocalItems((prev) => prev.filter((i) => i.id !== id))
+        setSelectedItemId(null)
+        onHighlightBagIdChange(null)
+        if (wasDetailsOpenForItem) {
+          setIsDetailsOpen(false)
+          setDetailsItemId(null)
+          onOpenDetails(null)
+        }
+        const { error: deleteError } = await supabase.from('bags').delete().eq('id', id)
+        if (deleteError) {
+          setLocalItems(previousItems)
+          setSelectedItemId(previousSelectedId)
+          onHighlightBagIdChange(previousHighlightId)
+          if (wasDetailsOpenForItem && previousDetailsItemId != null) {
+            setIsDetailsOpen(true)
+            setDetailsItemId(previousDetailsItemId)
+            onOpenDetails(previousDetailsItemId)
+          }
+          setError(friendlySupabaseMessage(deleteError, 'Failed to delete bag.'))
+          setTimeout(() => setError(null), 5000)
+        }
+      }, 'delete_box')
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [detailsItemId, onHighlightBagIdChange, onOpenDetails, setSelectedItemId])
 
   // Only attach Space-to-pan when details panel is closed. When panel is open, no listener → Space always works in inputs.
   useEffect(() => {
@@ -449,6 +799,36 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
       document.body.style.overflow = prevOverflow
     }
   }, [isDetailsOpen])
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (contextMenuRef.current?.contains(target)) return
+      setContextMenu(null)
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('touchstart', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('touchstart', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [contextMenu])
+
+  useEffect(() => {
+    return () => clearLongPressTimer()
+  }, [])
 
   const handleWheelRef = useRef((_e: WheelEvent) => {})
   handleWheelRef.current = (e: WheelEvent) => {
@@ -553,7 +933,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
           it.id === id ? { ...it, x: start.x, y: start.y } : it
         )
       )
-      setError(updateError.message ?? 'Failed to move bag.')
+      setError(friendlySupabaseMessage(updateError, 'Failed to move bag.'))
       setTimeout(() => setError(null), 5000)
     }
   }
@@ -595,7 +975,7 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
           it.id === id ? { ...it, x: start.origX, y: start.origY, width: start.origW, height: start.origH } : it
         )
       )
-      setError('Resize save failed: ' + (updateError.message ?? 'unknown'))
+      setError(friendlySupabaseMessage(updateError, 'Resize save failed.'))
       setTimeout(() => setError(null), 5000)
     }
   }
@@ -750,7 +1130,395 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
     }
   }
 
-  const handleCanvasClick = async (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const openContextMenuAt = (bagId: string, x: number, y: number) => {
+    setContextMenu({ bagId, x, y })
+  }
+
+  const handleCanvasContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault()
+    if (!isEditMode) return
+    const canvas = canvasRef.current
+    if (!canvas || !imageLoaded || selectedItemId == null) return
+    const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItemsRef.current)
+    if (!hitId || hitId !== selectedItemId) return
+    openContextMenuAt(hitId, e.clientX, e.clientY)
+  }
+
+  const handleCanvasTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas || !imageLoaded) return
+
+    if (e.touches.length >= 2) {
+      e.preventDefault()
+      clearLongPressTimer()
+      touchDragStateRef.current = null
+      setContextMenu(null)
+
+      const first = e.touches[0]
+      const second = e.touches[1]
+      const center = getTouchCenter(first, second)
+      const rect = canvas.getBoundingClientRect()
+      const anchorWorldX = (center.x - rect.left - offsetXRef.current) / scaleRef.current
+      const anchorWorldY = (center.y - rect.top - offsetYRef.current) / scaleRef.current
+      pinchStateRef.current = {
+        startDistance: getTouchDistance(first, second),
+        startScale: scaleRef.current,
+        anchorWorldX,
+        anchorWorldY,
+      }
+      return
+    }
+
+    pinchStateRef.current = null
+    if (e.touches.length !== 1 || !isEditMode || selectedItemId == null) {
+      touchDragStateRef.current = null
+      return
+    }
+
+    const touch = e.touches[0]
+    const { x: worldX, y: worldY } = clientToWorld(touch.clientX, touch.clientY)
+    const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItemsRef.current)
+    if (!hitId || hitId !== selectedItemId) {
+      touchDragStateRef.current = null
+      return
+    }
+
+    const selectedItem = localItemsRef.current.find((item) => item.id === hitId)
+    if (!selectedItem || selectedItem.locked) {
+      touchDragStateRef.current = null
+      return
+    }
+
+    const orig = canvasToOriginal(canvas, worldX, worldY)
+    touchDragStateRef.current = {
+      bagId: hitId,
+      dx: orig.x - selectedItem.x,
+      dy: orig.y - selectedItem.y,
+      started: false,
+    }
+
+    clearLongPressTimer()
+    longPressStartRef.current = { x: touch.clientX, y: touch.clientY }
+    longPressTimerRef.current = window.setTimeout(() => {
+      suppressNextClickRef.current = true
+      touchDragStateRef.current = null
+      openContextMenuAt(hitId, touch.clientX, touch.clientY)
+      clearLongPressTimer()
+    }, LONG_PRESS_MS)
+  }
+
+  const handleCanvasTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas || !imageLoaded) return
+
+    if (e.touches.length >= 2) {
+      e.preventDefault()
+      clearLongPressTimer()
+      touchDragStateRef.current = null
+
+      const first = e.touches[0]
+      const second = e.touches[1]
+      if (!pinchStateRef.current) {
+        const center = getTouchCenter(first, second)
+        const rect = canvas.getBoundingClientRect()
+        pinchStateRef.current = {
+          startDistance: getTouchDistance(first, second),
+          startScale: scaleRef.current,
+          anchorWorldX: (center.x - rect.left - offsetXRef.current) / scaleRef.current,
+          anchorWorldY: (center.y - rect.top - offsetYRef.current) / scaleRef.current,
+        }
+      }
+
+      const pinch = pinchStateRef.current
+      if (!pinch || pinch.startDistance <= 0) return
+      const center = getTouchCenter(first, second)
+      const distance = getTouchDistance(first, second)
+      const newScale = Math.max(
+        MIN_ZOOM,
+        Math.min(MAX_ZOOM, pinch.startScale * (distance / pinch.startDistance))
+      )
+      const rect = canvas.getBoundingClientRect()
+      setScale(newScale)
+      setOffsetX(center.x - rect.left - pinch.anchorWorldX * newScale)
+      setOffsetY(center.y - rect.top - pinch.anchorWorldY * newScale)
+      return
+    }
+
+    pinchStateRef.current = null
+    const touch = e.touches[0]
+    if (!touch) return
+    e.preventDefault()
+
+    if (longPressStartRef.current) {
+      const moved = Math.hypot(
+        touch.clientX - longPressStartRef.current.x,
+        touch.clientY - longPressStartRef.current.y
+      )
+      if (moved > LONG_PRESS_MOVE_TOLERANCE) {
+        clearLongPressTimer()
+      }
+    }
+
+    const touchDrag = touchDragStateRef.current
+    if (!touchDrag) return
+    e.preventDefault()
+
+    const item = localItemsRef.current.find((entry) => entry.id === touchDrag.bagId)
+    if (!item) return
+    if (!touchDrag.started) {
+      touchDrag.started = true
+      setIsDragging(true)
+      setDragItemId(touchDrag.bagId)
+      setDragOffset({ dx: touchDrag.dx, dy: touchDrag.dy })
+      draggedItemCurrentRef.current = { ...item }
+    }
+
+    const { x: worldX, y: worldY } = clientToWorld(touch.clientX, touch.clientY)
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
+
+    const orig = canvasToOriginal(canvas, worldX, worldY)
+    let newX = Math.round(orig.x - touchDrag.dx)
+    let newY = Math.round(orig.y - touchDrag.dy)
+    newX = Math.max(0, Math.min(newX, imageNaturalWidth - item.width))
+    newY = Math.max(0, Math.min(newY, imageNaturalHeight - item.height))
+    const updated = { ...item, x: newX, y: newY }
+    draggedItemCurrentRef.current = updated
+    didDragRef.current = true
+    setLocalItems((prev) =>
+      prev.map((entry) => (entry.id === touchDrag.bagId ? updated : entry))
+    )
+    drawOverlay(localItemsRef.current.map((entry) => (entry.id === touchDrag.bagId ? updated : entry)))
+  }
+
+  const handleCanvasTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length >= 2) return
+    if (e.touches.length === 1) {
+      pinchStateRef.current = null
+      clearLongPressTimer()
+      touchDragStateRef.current = null
+      return
+    }
+
+    clearLongPressTimer()
+    pinchStateRef.current = null
+    const wasDragging = touchDragStateRef.current?.started ?? false
+    touchDragStateRef.current = null
+
+    if (wasDragging && isDragging) {
+      handleDragEnd.current()
+    } else {
+      setIsDragging(false)
+      setDragItemId(null)
+      draggedItemCurrentRef.current = null
+    }
+  }
+
+  const handleCanvasTouchCancel = () => {
+    clearLongPressTimer()
+    pinchStateRef.current = null
+    touchDragStateRef.current = null
+    if (isDragging) {
+      handleDragEnd.current()
+    } else {
+      setIsDragging(false)
+      setDragItemId(null)
+      draggedItemCurrentRef.current = null
+    }
+  }
+
+  const performReorderFromMenu = async (direction: SwapDirection) => {
+    const bagId = contextMenu?.bagId
+    if (!bagId) return
+    setContextMenu(null)
+
+    const previousItems = localItemsRef.current
+    const optimistic = reorderBagsOneStep(previousItems, bagId, direction)
+    if (!optimistic.swapped) {
+      clearLongPressTimer()
+      return
+    }
+
+    setLocalItems(optimistic.nextItems)
+    const result = await swapBagZIndex(supabase, bagId, direction)
+    if (!result.swapped) {
+      setLocalItems(previousItems)
+      showTemporaryError(result.error ?? 'Unable to reorder box')
+    }
+  }
+
+  const performDeleteFromMenu = async () => {
+    const bagId = contextMenu?.bagId
+    if (!bagId) return
+    setContextMenu(null)
+
+    if (!confirm('Are you sure you want to delete this box? This cannot be undone.')) {
+      return
+    }
+
+    const previousItems = localItemsRef.current
+    const existing = previousItems.find((item) => item.id === bagId)
+    if (!existing) return
+    const previousSelectedId = selectedItemIdRef.current
+    const previousHighlightId = highlightBagIdRef.current
+    const previousDetailsItemId = detailsItemId
+    const wasDetailsOpenForItem =
+      isDetailsOpenRef.current && previousDetailsItemId != null && previousDetailsItemId === bagId
+
+    if (wasDetailsOpenForItem) {
+      setIsDetailsOpen(false)
+      setDetailsItemId(null)
+      onOpenDetails(null)
+    }
+
+    setLocalItems((prev) => prev.filter((item) => item.id !== bagId))
+    if (selectedItemId === bagId) {
+      setSelectedItemId(null)
+      onHighlightBagIdChange(null)
+    }
+
+    const { error: deleteError } = await supabase.from('bags').delete().eq('id', bagId)
+    if (deleteError) {
+      setLocalItems(previousItems)
+      setSelectedItemId(previousSelectedId)
+      onHighlightBagIdChange(previousHighlightId)
+      if (wasDetailsOpenForItem && previousDetailsItemId != null) {
+        setIsDetailsOpen(true)
+        setDetailsItemId(previousDetailsItemId)
+        onOpenDetails(previousDetailsItemId)
+      }
+      showTemporaryError(friendlySupabaseMessage(deleteError, 'Failed to delete box.'))
+    }
+  }
+
+  const handleReorderFromMenu = (direction: SwapDirection) => {
+    requestGuardedAction(() => performReorderFromMenu(direction), 'reorder_boxes')
+  }
+
+  const handleDeleteFromMenu = () => {
+    requestGuardedAction(() => performDeleteFromMenu(), 'delete_box')
+  }
+
+  const createBagAtViewportCenter = async () => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container || !imageLoaded || !userId) return
+
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
+
+    const width = 250
+    const height = 120
+    const rect = container.getBoundingClientRect()
+    const centerCanvasX = (rect.width / 2 - offsetXRef.current) / scaleRef.current
+    const centerCanvasY = (rect.height / 2 - offsetYRef.current) / scaleRef.current
+    const centerOriginal = canvasToOriginal(canvas, centerCanvasX, centerCanvasY)
+
+    let x = Math.round(centerOriginal.x - width / 2)
+    let y = Math.round(centerOriginal.y - height / 2)
+    x = Math.max(0, Math.min(x, imageNaturalWidth - width))
+    y = Math.max(0, Math.min(y, imageNaturalHeight - height))
+
+    const currentItems = localItemsRef.current
+    const nextName = nextBoxName(currentItems.map((item) => item.name))
+    const nextZIndex = currentItems.reduce((max, item) => Math.max(max, item.z_index), 0) + 1
+    const tempId = `temp-${Date.now()}`
+    const optimisticItem: Bag = {
+      id: tempId,
+      pack_id: packId,
+      user_id: userId,
+      x,
+      y,
+      width,
+      height,
+      created_at: new Date().toISOString(),
+      name: nextName,
+      color: '',
+      bag_weight: 0,
+      locked: false,
+      updated_at: new Date().toISOString(),
+      z_index: nextZIndex,
+    }
+
+    setSelectedItemId(tempId)
+    onHighlightBagIdChange(null)
+    setDetailsItemId(tempId)
+    setIsDetailsOpen(true)
+    onOpenDetails(tempId)
+
+    setLocalItems((prev) => {
+      const updated = [...prev, optimisticItem]
+      drawOverlay(updated)
+      return updated
+    })
+
+    const { data, error: insertError } = await supabase
+      .from('bags')
+      .insert({
+        pack_id: packId,
+        user_id: userId,
+        x,
+        y,
+        width,
+        height,
+        name: nextName,
+        color: '',
+        bag_weight: 0,
+        locked: false,
+        updated_at: new Date().toISOString(),
+        z_index: nextZIndex,
+      })
+      .select()
+      .single()
+
+    if (insertError || !data) {
+      setLocalItems((prev) => {
+        const updated = prev.filter((item) => item.id !== tempId)
+        drawOverlay(updated)
+        return updated
+      })
+      setSelectedItemId(null)
+      setIsDetailsOpen(false)
+      setDetailsItemId(null)
+      onOpenDetails(null)
+      setError(friendlySupabaseMessage(insertError, 'Failed to create bag'))
+      setTimeout(() => setError(null), 5000)
+      return
+    }
+
+    setLocalItems((prev) => {
+      const updated = prev.map((item) => (item.id === tempId ? data : item))
+      drawOverlay(updated)
+      return updated
+    })
+    setSelectedItemId(data.id)
+    setDetailsItemId((previous) => (previous === tempId ? data.id : previous))
+    onOpenDetails(data.id)
+  }
+
+  useEffect(() => {
+    if (addBagRequestId <= handledAddBagRequestRef.current) return
+    if (!isEditMode) {
+      handledAddBagRequestRef.current = addBagRequestId
+      return
+    }
+    if (!imageLoaded || !userId) return
+
+    handledAddBagRequestRef.current = addBagRequestId
+    void createBagAtViewportCenter()
+  }, [addBagRequestId, imageLoaded, isEditMode, userId])
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (contextMenu != null) {
+      setContextMenu(null)
+    }
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false
+      return
+    }
     if (didDragRef.current) {
       didDragRef.current = false
       return
@@ -769,112 +1537,35 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
     const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     if (hitId != null) {
       setSelectedItemId(hitId)
+      if (highlightBagId !== hitId) {
+        onHighlightBagIdChange(null)
+      }
       return
     }
 
-    // Click on empty space: clear selection and add new item
+    // Click on empty space: clear selection only (add box comes from header button).
     setSelectedItemId(null)
-    if (!isEditMode) return
-
-    // Get image natural dimensions
-    const imageNaturalWidth = imageNaturalWidthRef.current
-    const imageNaturalHeight = imageNaturalHeightRef.current
-
-    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
-
-    // Convert world coordinates to original image coordinates
-    const orig = canvasToOriginal(canvas, worldX, worldY)
-    const origX = orig.x
-    const origY = orig.y
-
-    // Create item centered at click position
-    const width = 250
-    const height = 120
-    let x = Math.round(origX - width / 2)
-    let y = Math.round(origY - height / 2)
-
-    // Clamp coordinates to image bounds
-    x = Math.max(0, Math.min(x, imageNaturalWidth - width))
-    y = Math.max(0, Math.min(y, imageNaturalHeight - height))
-
-    // Create optimistic bag with temporary ID
-    const tempId = `temp-${Date.now()}`
-    const optimisticItem: Bag = {
-      id: tempId,
-      pack_id: packId,
-      user_id: userId,
-      x,
-      y,
-      width,
-      height,
-      created_at: new Date().toISOString(),
-      name: 'Bag',
-      color: '',
-      bag_weight: 0,
-      locked: false,
-      updated_at: new Date().toISOString(),
-    }
-
-    // Add optimistic item immediately
-    const updatedItems = [...localItems, optimisticItem]
-    setLocalItems(updatedItems)
-    drawOverlay(updatedItems)
-
-    // Insert to Supabase
-    const { data, error: insertError } = await supabase
-      .from('bags')
-      .insert({
-        pack_id: packId,
-        user_id: userId,
-        x,
-        y,
-        width,
-        height,
-        name: 'Bag',
-        color: '',
-        bag_weight: 0,
-        locked: false,
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (insertError) {
-      // Remove optimistic bag and show error
-      setLocalItems((prev) => {
-        const itemsWithoutTemp = prev.filter((item) => item.id !== tempId)
-        drawOverlay(itemsWithoutTemp)
-        return itemsWithoutTemp
-      })
-      setError(insertError.message || 'Failed to create bag')
-      
-      // Clear error after 5 seconds
-      setTimeout(() => setError(null), 5000)
-    } else if (data) {
-      // Replace optimistic bag with real bag
-      setLocalItems((prev) => {
-        const replaced = prev.map((item) => (item.id === tempId ? data : item))
-        drawOverlay(replaced)
-        return replaced
-      })
-    }
+    onHighlightBagIdChange(null)
   }
 
   const handleCanvasDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isCoarsePointer) return
     const canvas = canvasRef.current
     if (!canvas || !imageLoaded) return
     const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
     const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     if (hitId != null) {
-      setDetailsItemId(hitId)
-      setIsDetailsOpen(true)
+      openDetailsForBag(hitId)
     }
   }
 
-  const handleCloseDetails = () => {
-    setIsDetailsOpen(false)
-    setDetailsItemId(null)
-    setDetailsSaveError(null)
+  const requestCloseDetails = () => {
+    requestGuardedAction(
+      () => {
+        closeDetailsImmediately()
+      },
+      'close_panel'
+    )
   }
 
   const handleUpdateBag = async (
@@ -903,15 +1594,16 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
       setLocalItems((prev) =>
         prev.map((b) => (b.id === bagId ? previousBag : b))
       )
-      setDetailsSaveError(updateError.message ?? 'Failed to save bag')
+      setDetailsSaveError(friendlySupabaseMessage(updateError, 'Failed to save bag'))
       setTimeout(() => setDetailsSaveError(null), 5000)
     } else {
       setDetailsSaveError(null)
     }
   }
 
-  const handleToggleEditMode = () => {
-    if (isEditMode) {
+  const applyToggleEditMode = () => {
+    setContextMenu(null)
+    if (isEditModeRef.current) {
       const dragId = dragItemIdRef.current
       if (dragId) {
         const start = dragStartPositionRef.current
@@ -945,8 +1637,58 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
         didResizeRef.current = false
       }
     }
-    setIsEditMode((prev) => !prev)
+    onToggleEditMode()
   }
+
+  const requestToggleEditMode = useCallback(() => {
+    if (isEditModeRef.current) {
+      requestGuardedAction(() => {
+        applyToggleEditMode()
+      }, 'toggle_edit_off')
+      return
+    }
+    applyToggleEditMode()
+  }, [requestGuardedAction])
+
+  useEffect(() => {
+    if (!onRegisterToggleEditModeHandler) return
+    onRegisterToggleEditModeHandler(requestToggleEditMode)
+    return () => onRegisterToggleEditModeHandler(null)
+  }, [onRegisterToggleEditModeHandler, requestToggleEditMode])
+
+  const requestMoveItemsAction = useCallback(
+    (action: () => Promise<void> | void) => {
+      requestGuardedAction(action, 'move_items')
+    },
+    [requestGuardedAction]
+  )
+
+  useEffect(() => {
+    if (!onRegisterMoveItemsGuardHandler) return
+    onRegisterMoveItemsGuardHandler(requestMoveItemsAction)
+    return () => onRegisterMoveItemsGuardHandler(null)
+  }, [onRegisterMoveItemsGuardHandler, requestMoveItemsAction])
+
+  const menuBagId = contextMenu?.bagId ?? null
+  const canBringForward = menuBagId
+    ? reorderBagsOneStep(localItems, menuBagId, 'forward').swapped
+    : false
+  const canSendBackward = menuBagId
+    ? reorderBagsOneStep(localItems, menuBagId, 'backward').swapped
+    : false
+  const selectedItemGearAnchor = (() => {
+    if (!selectedItem || !imageLoaded) return null
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return null
+
+    const right = Math.max(0, Math.min(imageNaturalWidth, selectedItem.x + selectedItem.width))
+    const top = Math.max(0, Math.min(imageNaturalHeight, selectedItem.y))
+    return {
+      left: `${(right / imageNaturalWidth) * 100}%`,
+      top: `${(top / imageNaturalHeight) * 100}%`,
+    }
+  })()
 
   return (
     <div className="w-full">
@@ -992,13 +1734,19 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
                           : 'nesw-resize'
                         : hoveredItemId && hoveredItemId === selectedItemId
                           ? 'grab'
-                          : hoveredItemId
+                        : hoveredItemId
                             ? 'pointer'
                             : 'crosshair',
+                touchAction: 'none',
             }}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
+            onContextMenu={handleCanvasContextMenu}
+            onTouchStart={handleCanvasTouchStart}
+            onTouchMove={handleCanvasTouchMove}
+            onTouchEnd={handleCanvasTouchEnd}
+            onTouchCancel={handleCanvasTouchCancel}
             onMouseLeave={() => {
               setHoveredItemId(null)
               setHoveredHandle(null)
@@ -1006,16 +1754,53 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
             onClick={handleCanvasClick}
             onDoubleClick={handleCanvasDoubleClick}
           />
+          {selectedItem && selectedItemGearAnchor && (
+            <button
+              type="button"
+              className="absolute z-20 -translate-x-[calc(100%+6px)] translate-y-1 rounded-full border border-slate-200 bg-white p-1.5 text-slate-700 shadow hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              style={selectedItemGearAnchor}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                openDetailsForBag(selectedItem.id)
+              }}
+              aria-label={`Open details for ${selectedItem.name}`}
+            >
+              <GearIcon />
+            </button>
+          )}
         </div>
       </div>
-      {!isDetailsOpen && (
-        <div className="absolute top-0 right-0 z-50 pointer-events-none">
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 min-w-44 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          aria-label="Box actions"
+        >
           <button
             type="button"
-            className="pointer-events-auto mt-2 mr-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 shadow-sm hover:bg-slate-50"
-            onClick={handleToggleEditMode}
+            className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+            onClick={() => void handleReorderFromMenu('forward')}
+            disabled={!canBringForward}
           >
-            {isEditMode ? 'Done' : 'Edit'}
+            Bring forward
+          </button>
+          <button
+            type="button"
+            className="block w-full rounded-md px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+            onClick={() => void handleReorderFromMenu('backward')}
+            disabled={!canSendBackward}
+          >
+            Send backward
+          </button>
+          <button
+            type="button"
+            className="block w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+            onClick={() => void handleDeleteFromMenu()}
+          >
+            Delete
           </button>
         </div>
       )}
@@ -1025,15 +1810,18 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
             className="fixed inset-0 bg-black/20 z-10"
             role="button"
             tabIndex={-1}
-            onClick={handleCloseDetails}
+            onClick={requestCloseDetails}
             aria-label="Close panel"
           />
           <DetailsPanel
+            ref={detailsPanelRef}
             bag={detailsItem}
             isEditMode={isEditMode}
-            onClose={handleCloseDetails}
-            onToggleEditMode={handleToggleEditMode}
+            onClose={requestCloseDetails}
+            onToggleEditMode={requestToggleEditMode}
             onUpdateBag={handleUpdateBag}
+            requestMoveItemsAction={requestMoveItemsAction}
+            enableEscapeClose={!isCoarsePointer}
             onSaveSuccess={(bagRow) =>
               setLocalItems((prev) =>
                 prev.map((b) => (b.id === bagRow.id ? { ...b, ...bagRow } : b))
@@ -1043,6 +1831,51 @@ export function PlannerCanvas({ imageUrl, name, packId, bags }: PlannerCanvasPro
             clearSaveError={() => setDetailsSaveError(null)}
           />
         </>
+      )}
+      {isUnsavedGuardOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Unsaved changes"
+            className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl"
+          >
+            <h3 className="text-sm font-semibold text-slate-900">Unsaved changes</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              You have unsaved changes. Save before continuing?
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
+                onClick={handleUnsavedGuardCancel}
+                disabled={unsavedGuardBusyAction != null}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:opacity-60"
+                onClick={() => {
+                  void handleUnsavedGuardSave()
+                }}
+                disabled={unsavedGuardBusyAction != null}
+              >
+                {unsavedGuardBusyAction === 'save' ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:pointer-events-none disabled:opacity-60"
+                onClick={() => {
+                  void handleUnsavedGuardDiscard()
+                }}
+                disabled={unsavedGuardBusyAction != null}
+              >
+                {unsavedGuardBusyAction === 'discard' ? 'Discarding…' : 'Discard'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       </div>
 

@@ -1,6 +1,6 @@
 # PackSketcher (MVP) — Step-by-Step Blueprint (Repo-Tailored)
 
-Last updated: 2026-02-01
+Last updated: 2026-02-06
 
 ## Repo Context (Observed)
 - Next.js App Router under `src/app`.
@@ -86,6 +86,16 @@ Last updated: 2026-02-01
 2. Functional checks: template suffix create, add box naming, move/resize, reorder swap, cascade delete, dashboard search rules, search click highlight, bulk move + conflict rename flow, undo toast window.
 3. Automated tests (recommended): validation helpers, naming helpers, error mapping, dashboard search dropdown, details panel open/close + save, bulk move + undo (mock RPC).
 
+## Phase 12 — Workspace Management Extensions (Prompts 22–23)
+1. Add full custom background upload flow (file upload + validation + create workspace).
+2. Add workspace rename flow from dashboard card modal.
+3. Ensure both flows refresh dashboard and activity feed correctly.
+
+## Phase 13 — Details Panel UX Polish (Prompt 24)
+1. Redesign full details panel visual hierarchy (clean/minimal, Apple-style direction).
+2. Preserve all existing behavior and accessibility/keyboard interactions.
+3. Add focused regression tests for redesigned structure and critical interactions.
+
 ---
 
 # Iterative Chunking (Round 3 — Right-Sized Steps)
@@ -111,6 +121,9 @@ Last updated: 2026-02-01
 20. Items: multi-select + bulk move + conflict handling.
 21. RPC move + undo toast.
 22. Integration wiring + regression tests.
+23. Dashboard: custom background upload flow (storage + create workspace).
+24. Dashboard: workspace rename flow (card modal + API PATCH).
+25. Details panel: full visual redesign + interaction regression checks.
 
 ---
 
@@ -495,4 +508,94 @@ Requirements:
 
 Tests:
 - Add e2e/integration tests if feasible; otherwise document manual test checklist.
+```
+
+## Prompt 22 — Dashboard: Custom Background Upload
+```
+Implement full custom background upload from dashboard.
+
+Where:
+- `src/app/(dashboard)/dashboard/page.tsx`
+- Add upload UI components in `src/app/(dashboard)/dashboard/*` (modal/sheet as needed).
+- Extend `src/app/api/backgrounds/route.ts` for custom upload create path or add a dedicated upload route.
+
+Requirements:
+- Enable existing “Upload Custom Background” CTA.
+- Open modal/sheet with:
+  - workspace name input
+  - file picker
+  - Save/Cancel actions
+- Validate client-side before submit:
+  - allowed mime: `image/png`, `image/jpeg`, `image/webp`
+  - max size: 10MB
+  - image dimensions read from file metadata.
+- Upload image to Supabase Storage path scoped by user.
+- Create workspace with:
+  - `type: 'custom'`
+  - `image_url`, `width`, `height`
+  - trimmed validated name.
+- Refresh dashboard list + trigger activities refresh event.
+- Show mapped friendly errors for API/DB failures.
+
+Tests:
+- Component test for modal validation states + submit loading/error/success.
+- API/helper unit tests for payload validation and friendly error mapping.
+```
+
+## Prompt 23 — Dashboard: Workspace Rename (Card Modal)
+```
+Implement workspace rename flow from dashboard cards.
+
+Where:
+- `src/app/api/backgrounds/[id]/route.ts` (add `PATCH`)
+- `src/app/(dashboard)/dashboard/BackgroundCard.tsx`
+
+Requirements:
+- Add Rename action per workspace card.
+- Open modal with current name prefilled + Save/Cancel.
+- Validation rules:
+  - trim required
+  - non-empty
+  - max 60 chars
+  - case-insensitive unique per user.
+- Return and display friendly mapped DB errors.
+- On success:
+  - refresh dashboard list
+  - trigger activities refresh event.
+
+Tests:
+- API route test for successful rename and unique-constraint failure.
+- Component test for modal open/save/cancel and error rendering.
+```
+
+## Prompt 24 — Details Panel: Visual Redesign
+```
+Redesign the full details panel UI while preserving existing behavior.
+
+Where:
+- `src/components/planner/DetailsPanel.tsx`
+
+Requirements:
+- Apply clean/minimal visual direction (Apple-style).
+- Clear section hierarchy:
+  - Box settings
+  - Items
+  - Bulk move
+  - Totals
+  - Save actions.
+- Reduce visual noise:
+  - tighter spacing system
+  - clearer typography hierarchy
+  - stronger primary/secondary action clarity.
+- Add sticky actions/footer where appropriate (especially mobile).
+- Preserve all current behavior:
+  - save/cancel model
+  - unsaved guard
+  - multi-select and move conflict flow
+  - undo move behavior
+  - keyboard/accessibility interactions.
+
+Tests:
+- Existing interaction regression tests remain green.
+- Add focused component tests for redesigned structure and accessibility landmarks.
 ```

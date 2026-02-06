@@ -1,6 +1,6 @@
 # PackSketcher (MVP) — TODO Checklist
 
-Last updated: 2026-02-01
+Last updated: 2026-02-06
 
 ## Prompt Map (When to Use Which Prompt)
 - Prompt 0: test harness setup (Vitest + RTL + jsdom).
@@ -25,6 +25,9 @@ Last updated: 2026-02-01
 - Prompt 19: multi-select + bulk move UI.
 - Prompt 20: bulk move RPC + conflict flow + undo.
 - Prompt 21: integration wiring + regression checks.
+- Prompt 22: custom background upload flow (dashboard).
+- Prompt 23: workspace rename flow (dashboard card modal + API PATCH).
+- Prompt 24: details panel visual redesign (clean/minimal).
 
 ## Phase 0 — Baseline & Setup (Prompt 0)
 - [x] Review repo structure and App Router boundaries (server vs client components).
@@ -94,146 +97,146 @@ Last updated: 2026-02-01
 
 ## Phase 4 — Dashboard (Prompts 8–11)
 ### Workspaces (Prompt 8)
-- [ ] Ensure workspace cards list and delete confirmation are correct.
-- [ ] Hide workspace type in UI (type stored only in DB).
-- [ ] Ensure delete cascades via DB FKs (verify in UI + DB).
+- [x] Ensure workspace cards list and delete confirmation are correct.
+- [x] Hide workspace type in UI (type stored only in DB).
+- [x] Ensure delete cascades via DB FKs (verify in UI + DB).
 
 ### Templates (Prompt 9)
-- [ ] Update template create flow to use suffix logic from API.
-- [ ] Show friendly error messages on create failure.
+- [x] Update template create flow to use suffix logic from API.
+- [x] Show friendly error messages on create failure.
 
 ### Global Item Search (Prompt 10)
-- [ ] Add global search input component.
-- [ ] Add debounce (200–300ms).
-- [ ] Show hint “Type 3+ characters” for <3 chars.
-- [ ] Add dropdown under input.
-- [ ] Close dropdown on outside click or Escape.
-- [ ] Show row format: `Item name — Workspace / Box`.
-- [ ] Clicking result navigates to planner and selects/highlights box.
-- [ ] No auto-pan/zoom; no auto-open details panel.
-- [ ] Tests for debounce + open/close + click navigation.
+- [x] Add global search input component.
+- [x] Add debounce (200–300ms).
+- [x] Show hint “Type 3+ characters” for <3 chars.
+- [x] Add dropdown under input.
+- [x] Close dropdown on outside click or Escape.
+- [x] Show row format: `Item name — Workspace / Box`.
+- [x] Clicking result navigates to planner and selects/highlights box.
+- [x] No auto-pan/zoom; no auto-open details panel.
+- [x] Tests for debounce + open/close + click navigation.
 
 ### Activity Feed (Prompt 11)
-- [ ] Replace “Your Stats” placeholder with feed component.
-- [ ] Show last 20 activity records.
-- [ ] Relative timestamps (e.g., “2h ago”).
-- [ ] Collapsible/minimizable state (not persisted).
-- [ ] Tests for relative time formatting and collapse behavior.
+- [x] Replace “Your Stats” placeholder with feed component.
+- [x] Show last 20 activity records.
+- [x] Relative timestamps (e.g., “2h ago”).
+- [x] Collapsible/minimizable state (not persisted).
+- [x] Tests for relative time formatting and collapse behavior.
 
 ## Phase 5 — Planner Core (Prompts 12–16)
 ### State & Layout (Prompt 12)
-- [ ] Create a client `PlannerShell` to share state between header and canvas.
-- [ ] Lift `isEditMode`, `selectedBagId`, `highlightBagId` to shell.
-- [ ] Remove edit toggle button from canvas overlay; move to header.
-- [ ] Ensure default mode is View on each load.
+- [x] Create a client `PlannerShell` to share state between header and canvas.
+- [x] Lift `isEditMode`, `selectedBagId`, `highlightBagId` to shell.
+- [x] Remove edit toggle button from canvas overlay; move to header.
+- [x] Ensure default mode is View on each load.
 
 ### Add Box (Prompt 13)
-- [ ] Add “+ Add box” button in header (Edit mode only).
-- [ ] New box centered in viewport.
-- [ ] Default size 250×120 in original image coordinates.
-- [ ] Default name `Box N` smallest free number in workspace.
-- [ ] Immediately open details panel for new box.
-- [ ] Remove “click empty space creates box”.
-- [ ] Unit test for `Box N` naming helper.
+- [x] Add “+ Add box” button in header (Edit mode only).
+- [x] New box centered in viewport.
+- [x] Default size 250×120 in original image coordinates.
+- [x] Default name `Box N` smallest free number in workspace.
+- [x] Immediately open details panel for new box.
+- [x] Remove “click empty space creates box”.
+- [x] Unit test for `Box N` naming helper.
 
 ### Selection + Rendering (Prompt 14)
-- [ ] Ensure selection works in View + Edit modes.
-- [ ] Draw labels in top-left, scale with zoom.
-- [ ] Truncate/hide labels if they don’t fit.
-- [ ] Render order by `z_index` (higher drawn last).
-- [ ] Highlight box when navigated from search.
+- [x] Ensure selection works in View + Edit modes.
+- [x] Draw labels in top-left, scale with zoom.
+- [x] Truncate/hide labels if they don’t fit.
+- [x] Render order by `z_index` (higher drawn last).
+- [x] Highlight box when navigated from search.
 
 ### Move / Resize (Prompt 13, follow-on)
-- [ ] Desktop: first click selects; drag moves if selected.
-- [ ] Desktop: resize handles in Edit mode.
-- [ ] Persist move/resize to DB.
-- [ ] Roll back on DB error with message.
+- [x] Desktop: first click selects; drag moves if selected.
+- [x] Desktop: resize handles in Edit mode.
+- [x] Persist move/resize to DB.
+- [x] Roll back on DB error with message.
 
 ### Mobile Gestures (Prompt 13, follow-on)
-- [ ] One-finger drag moves selected box.
-- [ ] Pinch to zoom, two-finger pan.
-- [ ] One finger reserved for box interactions.
+- [x] One-finger drag moves selected box.
+- [x] Pinch to zoom, two-finger pan.
+- [x] One finger reserved for box interactions.
 
 ### Context Menu (Reorder + Delete) (Prompt 15)
-- [ ] Desktop right-click; mobile long-press.
-- [ ] Menu: bring forward, send backward, delete.
-- [ ] Reorder uses `swap_bag_z_index` RPC (1-step swap).
-- [ ] Delete shows confirm.
-- [ ] Optimistic UI + rollback on error.
+- [x] Desktop right-click; mobile long-press.
+- [x] Menu: bring forward, send backward, delete.
+- [x] Reorder uses `swap_bag_z_index` RPC (1-step swap).
+- [x] Delete shows confirm.
+- [x] Optimistic UI + rollback on error.
 
 ## Phase 6 — Details Panel (Prompts 16–18)
 ### Open/Close Rules (Prompt 16)
-- [ ] Desktop: double-click OR gear icon overlay to open.
-- [ ] Mobile: gear icon overlay only.
-- [ ] Overlay click closes.
-- [ ] Esc closes (desktop).
-- [ ] If panel open and user selects another box, panel stays on current box.
+- [x] Desktop: double-click OR gear icon overlay to open.
+- [x] Mobile: gear icon overlay only.
+- [x] Overlay click closes.
+- [x] Esc closes (desktop).
+- [x] If panel open and user selects another box, panel stays on current box.
 
 ### Save Model (Prompt 17)
-- [ ] Manual Save/Cancel (no auto-save).
-- [ ] Use `save_bag_details` RPC for atomic save.
-- [ ] Show “Saved” feedback.
-- [ ] Inline error display for save failures.
+- [x] Manual Save/Cancel (no auto-save).
+- [x] Use `save_bag_details` RPC for atomic save.
+- [x] Show “Saved” feedback.
+- [x] Inline error display for save failures.
 
 ### Totals (Prompt 17)
-- [ ] Total weight (bag + items; missing item weight treated as 0).
-- [ ] Item count.
+- [x] Total weight (bag + items; missing item weight treated as 0).
+- [x] Item count.
 
 ### Unsaved Changes Guard (Prompt 18)
-- [ ] Guard when:
-  - [ ] closing panel
-  - [ ] toggling Edit off
-  - [ ] deleting a box
-  - [ ] reordering boxes
-  - [ ] moving items
-  - [ ] navigating away
-- [ ] Modal: Cancel / Save / Discard.
+- [x] Guard when:
+  - [x] closing panel
+  - [x] toggling Edit off
+  - [x] deleting a box
+  - [x] reordering boxes
+  - [x] moving items
+  - [x] navigating away
+- [x] Modal: Cancel / Save / Discard.
 
 ## Phase 7 — Items + Bulk Move (Prompts 19–20)
 ### Items CRUD (Prompt 19)
-- [ ] Name required, max 60, unique per box (case-insensitive).
-- [ ] Description optional.
-- [ ] Weight optional (null allowed), 0..9000.
-- [ ] Prevent duplicates in UI + DB.
+- [x] Name required, max 60, unique per box (case-insensitive).
+- [x] Description optional.
+- [x] Weight optional (null allowed), 0..9000.
+- [x] Prevent duplicates in UI + DB.
 
 ### Multi-select Mode (Prompt 19)
-- [ ] Toggle available on desktop + mobile.
-- [ ] When ON: tap/click selects items; no per-item edit.
-- [ ] Exit multi-select to edit items.
+- [x] Toggle available on desktop + mobile.
+- [x] When ON: tap/click selects items; no per-item edit.
+- [x] Exit multi-select to edit items.
 
 ### Bulk Move (Prompt 19)
-- [ ] “Move selected” action.
-- [ ] Target search across Workspace / Box.
-- [ ] Exclude current box by default.
-- [ ] If unsaved changes exist: require Save/Discard first.
+- [x] “Move selected” action.
+- [x] Target search across Workspace / Box.
+- [x] Exclude current box by default.
+- [x] If unsaved changes exist: require Save/Discard first.
 
 ### Conflict Handling (Prompt 20)
-- [ ] Detect duplicate name conflicts (case-insensitive).
-- [ ] Prompt rename for conflicts, one by one in alphabetical order.
-- [ ] Allow cancel.
+- [x] Detect duplicate name conflicts (case-insensitive).
+- [x] Prompt rename for conflicts, one by one in alphabetical order.
+- [x] Allow cancel.
 
 ### RPC Move + Undo (Prompt 20)
-- [ ] Use `move_items_bulk` RPC (single call).
-- [ ] Preserve `created_at`, update `updated_at` and `last_moved_at`.
-- [ ] Create single activity record per move.
-- [ ] Undo toast (10s) using `undo_move_items_bulk`.
-- [ ] Undo restores names and locations.
+- [x] Use `move_items_bulk` RPC (single call).
+- [x] Preserve `created_at`, update `updated_at` and `last_moved_at`.
+- [x] Create single activity record per move.
+- [x] Undo toast (10s) using `undo_move_items_bulk`.
+- [x] Undo restores names and locations.
 
 ## Phase 8 — Activity Feed Events (Prompt 21, plus DB triggers)
-- [ ] Workspace renamed / deleted events logged.
-- [ ] Box created / deleted events logged.
-- [ ] Item created / deleted events logged.
-- [ ] Item moved event from RPC.
-- [ ] Ensure feed updates after actions.
+- [x] Workspace renamed / deleted events logged.
+- [x] Box created / deleted events logged.
+- [x] Item created / deleted events logged.
+- [x] Item moved event from RPC.
+- [x] Ensure feed updates after actions.
 
 ## Phase 9 — Error Handling (Prompts 2, 15, 20)
-- [ ] Map DB unique/check failures to user-friendly messages.
-- [ ] Roll back optimistic UI on failure (move/resize/reorder/delete).
-- [ ] RPC conflict failures show rename UI, no partial moves.
+- [x] Map DB unique/check failures to user-friendly messages.
+- [x] Roll back optimistic UI on failure (move/resize/reorder/delete).
+- [x] RPC conflict failures show rename UI, no partial moves.
 
 ## Phase 10 — Security (Manual verification)
-- [ ] RLS remains enforced.
-- [ ] RPC functions validate `auth.uid()` ownership.
+- [x] RLS remains enforced.
+- [x] RPC functions validate `auth.uid()` ownership.
 
 ## Phase 11 — Testing & Regression (Prompt 21)
 ### DB Constraints (manual or automated)
@@ -260,3 +263,29 @@ Last updated: 2026-02-01
 - [ ] Component tests for dashboard search + dropdown.
 - [ ] Component tests for details panel open/close + save.
 - [ ] Integration tests for bulk move + undo (mock RPC).
+
+## Phase 12 — Workspace Management Extensions (Prompts 22–23)
+### Custom Background Upload (Prompt 22)
+- [x] Enable upload CTA on dashboard.
+- [x] Add upload modal/sheet (file + workspace name + Save/Cancel).
+- [x] Validate file type/size/dimensions before submit.
+- [x] Upload image to storage and create `custom` workspace row.
+- [x] Show friendly error + loading states.
+- [x] Refresh dashboard list + activity refresh event after success.
+- [x] Tests for upload validation and submit flow.
+
+### Workspace Rename (Prompt 23)
+- [x] Add rename action on workspace card.
+- [x] Add PATCH API for workspace rename (`/api/backgrounds/[id]`).
+- [x] Validate trim/non-empty/max-60/case-insensitive unique rules.
+- [x] Map DB failures to friendly rename errors.
+- [x] Refresh dashboard list + activity refresh event after success.
+- [x] Tests for API rename and UI modal flow.
+
+## Phase 13 — Details Panel UX Polish (Prompt 24)
+- [ ] Redesign full `DetailsPanel` visual layout (clean/minimal, Apple-style direction).
+- [ ] Reorganize section hierarchy: Box settings / Items / Bulk move / Totals / Save actions.
+- [ ] Improve action clarity (Save/Cancel, Move selected, conflicts, undo area).
+- [ ] Add sticky action/footer behavior where appropriate (desktop + mobile).
+- [ ] Preserve all existing behaviors (save/cancel, unsaved guard, conflict flow, undo, keyboard accessibility).
+- [ ] Add/adjust component tests for redesigned structure and interactions.

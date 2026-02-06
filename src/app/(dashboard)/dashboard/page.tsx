@@ -2,7 +2,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { BackgroundCard } from './BackgroundCard'
 import { LogoutButton } from './LogoutButton'
 import { TemplateGrid } from './TemplateGrid'
+import { GlobalItemSearch } from './GlobalItemSearch'
+import { ActivityFeed } from './ActivityFeed'
+import { UploadCustomBackgroundButton } from './UploadCustomBackgroundButton'
 import type { Background } from '@/types'
+import type { ActivityResponse } from '@/lib/activities'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -34,23 +38,35 @@ export default async function DashboardPage() {
     return <div>Please log in</div>
   }
 
-  // Fetch user's saved backgrounds via API
+  // Fetch dashboard sections via API routes
   let backgrounds: Background[] = []
+  let activities: ActivityResponse[] = []
   try {
     const headersList = await headers()
     const host = headersList.get('host') || 'localhost:3000'
     const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-    const response = await fetch(`${protocol}://${host}/api/backgrounds`, {
-      cache: 'no-store',
-      headers: {
-        Cookie: headersList.get('cookie') || '',
-      },
-    })
-    if (response.ok) {
-      backgrounds = await response.json()
+    const requestHeaders = { Cookie: headersList.get('cookie') || '' }
+
+    const [backgroundsResponse, activitiesResponse] = await Promise.all([
+      fetch(`${protocol}://${host}/api/backgrounds`, {
+        cache: 'no-store',
+        headers: requestHeaders,
+      }),
+      fetch(`${protocol}://${host}/api/activities`, {
+        cache: 'no-store',
+        headers: requestHeaders,
+      }),
+    ])
+
+    if (backgroundsResponse.ok) {
+      backgrounds = await backgroundsResponse.json()
+    }
+
+    if (activitiesResponse.ok) {
+      activities = await activitiesResponse.json()
     }
   } catch (error) {
-    console.error('Failed to fetch backgrounds:', error)
+    console.error('Failed to fetch dashboard data:', error)
   }
 
   return (
@@ -79,6 +95,11 @@ export default async function DashboardPage() {
           <LogoutButton />
         </div>
 
+        {/* Global Item Search */}
+        <div className="mb-10">
+          <GlobalItemSearch />
+        </div>
+
         {/* Background Templates Section */}
         <div className="mb-12">
           <h2 className="text-base font-semibold text-slate-900 mb-4">
@@ -93,12 +114,7 @@ export default async function DashboardPage() {
             <h2 className="text-base font-semibold text-slate-900">
               Recent Backgrounds
             </h2>
-            <button
-              disabled
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-400 cursor-not-allowed"
-            >
-              Upload Custom Background
-            </button>
+            <UploadCustomBackgroundButton />
           </div>
           {backgrounds && backgrounds.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -115,16 +131,9 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* User Stats Placeholder */}
+        {/* Activity Feed */}
         <div className="mb-8">
-          <h2 className="text-base font-semibold text-slate-900 mb-4">
-            Your Stats
-          </h2>
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-slate-500 text-center">
-              Stats will be displayed here soon.
-            </p>
-          </div>
+          <ActivityFeed activities={activities} />
         </div>
       </div>
     </div>
