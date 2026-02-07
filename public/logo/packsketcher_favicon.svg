@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <g transform="rotate(45 512 512)">
-    <rect x="300" y="480" width="400" height="80" fill="#F28C40" />
-    <polygon points="700,480 760,520 700,560" fill="#FFD600" />
-  </g>
-  <!-- Wavy line starting near rotated tip -->
-  <path d="M690 700 q 40 30 80 0 q 40 -30 80 0" stroke="#0089A1" stroke-width="20" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-</svg>
