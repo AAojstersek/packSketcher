@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   title: "PackSketcher",
   description: "Visual packing planner for bags and gear",
   icons: {
-    icon: [
-      { url: "/logo/PSlogoWhite.svg", type: "image/svg+xml" },
-    ],
+    icon: [{ url: "/icon", type: "image/png" }],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+    shortcut: ["/favicon.ico"],
   },
 };
 
