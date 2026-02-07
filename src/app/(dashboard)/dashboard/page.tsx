@@ -90,7 +90,6 @@ export default async function DashboardPage() {
                   />
                   <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">PackSketcher</h1>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Pack planning dashboard</p>
               </div>
               <LogoutButton />
             </div>

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "PackSketcher",
     short_name: "PackSketcher",
-    description: "Visual packing planner for bags and gear",
+    description: "Visual planner for organizing boxes, bags and gear",
     start_url: "/",
     display: "standalone",
     background_color: "#0f172a",

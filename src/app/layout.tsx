@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "PackSketcher",
-  description: "Visual packing planner for bags and gear",
+  description: "Visual planner for organizing boxes, bags and gear",
   applicationName: "PackSketcher",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
