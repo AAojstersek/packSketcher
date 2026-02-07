@@ -108,12 +108,12 @@ export default async function DashboardPage() {
 
           <div className="grid gap-4 lg:grid-cols-12">
             {/* Global Item Search */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5 lg:col-span-7">
+            <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5 lg:col-span-5">
               <GlobalItemSearch />
             </section>
 
             {/* Background Templates Section */}
-            <TemplatesSection templates={LOCAL_TEMPLATES} className="lg:col-span-5" />
+            <TemplatesSection templates={LOCAL_TEMPLATES} className="lg:col-span-7" />
           </div>
 
           {/* Recent Backgrounds Section */}

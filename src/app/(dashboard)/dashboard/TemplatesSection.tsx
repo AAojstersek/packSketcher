@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { BackgroundType } from '@/types'
 import { TemplateGrid } from './TemplateGrid'
 
@@ -15,8 +15,35 @@ interface TemplatesSectionProps {
   className?: string
 }
 
+const STORAGE_KEY = 'packsketcher:dashboard:templates-collapsed'
+
 export function TemplatesSection({ templates, className }: TemplatesSectionProps) {
-  const [collapsed, setCollapsed] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY)
+      if (saved === 'true') {
+        setCollapsed(true)
+      } else if (saved === 'false') {
+        setCollapsed(false)
+      }
+    } catch {
+      // Ignore storage read failures and keep default expanded state.
+    }
+  }, [])
+
+  const handleToggle = () => {
+    setCollapsed((previous) => {
+      const next = !previous
+      try {
+        window.localStorage.setItem(STORAGE_KEY, String(next))
+      } catch {
+        // Ignore storage write failures.
+      }
+      return next
+    })
+  }
 
   return (
     <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className ?? ''}`}>
@@ -24,7 +51,7 @@ export function TemplatesSection({ templates, className }: TemplatesSectionProps
         <h2 className="text-sm font-semibold text-slate-900 sm:text-base">Background Templates</h2>
         <button
           type="button"
-          onClick={() => setCollapsed((previous) => !previous)}
+          onClick={handleToggle}
           className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 sm:text-sm"
           aria-expanded={!collapsed}
           aria-controls="dashboard-template-grid"

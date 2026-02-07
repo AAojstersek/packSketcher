@@ -356,21 +356,29 @@ export function PlannerCanvas({
         const isHighlighted = !isSelected && highlightBagId != null && item.id === highlightBagId
         const isHovered = item.id === hoveredItemId
 
-        // Subtle outer stroke for selected (glow)
-        if (isSelected || isHighlighted) {
+        // Outer ring to make selected/linked boxes easier to spot on busy backgrounds.
+        if (isSelected) {
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.28)`
+          ctx.lineWidth = 6
+          ctx.strokeRect(itemX - 3, itemY - 3, itemWidth + 6, itemHeight + 6)
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)'
+          ctx.lineWidth = 1
+          ctx.strokeRect(itemX - 1.5, itemY - 1.5, itemWidth + 3, itemHeight + 3)
+        } else if (isHighlighted) {
           ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.2)`
-          ctx.lineWidth = isSelected ? 5 : 3
+          ctx.lineWidth = 4
           ctx.strokeRect(itemX - 2, itemY - 2, itemWidth + 4, itemHeight + 4)
         }
 
-        // Fill with bag color, low alpha
-        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.15)`
+        // Fill with bag color. Selected/hovered items get stronger contrast.
+        const fillAlpha = isSelected ? 0.22 : isHighlighted ? 0.18 : isHovered ? 0.16 : 0.12
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${fillAlpha})`
         ctx.fillRect(itemX, itemY, itemWidth, itemHeight)
 
         // Border: bag color, higher alpha; thickness by state
-        const strokeAlpha = isSelected || isHighlighted ? 0.8 : 0.65
+        const strokeAlpha = isSelected ? 0.95 : isHighlighted ? 0.85 : isHovered ? 0.78 : 0.65
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${strokeAlpha})`
-        ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2 : 1.5
+        ctx.lineWidth = isSelected ? 3 : isHovered ? 2.25 : 1.5
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
 
         // Box label in top-left; truncate or hide when space is too small.
@@ -401,12 +409,13 @@ export function PlannerCanvas({
           }
         }
 
-        // Corner handles when selected (bag color, high alpha)
+        // Corner handles when selected: bright interior + colored outline for better visibility.
         if (isSelected) {
           const handleSize = isCoarsePointer ? HANDLE_SIZE_COARSE : HANDLE_SIZE_DESKTOP
-          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.98)'
           ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.95)`
-          ctx.lineWidth = 1
+          ctx.lineWidth = 2
+          const centerDotSize = Math.max(2, Math.floor(handleSize * 0.35))
           const corners = [
             [itemX, itemY],
             [itemX + itemWidth - handleSize, itemY],
@@ -416,6 +425,11 @@ export function PlannerCanvas({
           corners.forEach(([cx, cy]) => {
             ctx.fillRect(cx, cy, handleSize, handleSize)
             ctx.strokeRect(cx, cy, handleSize, handleSize)
+            const dotX = cx + (handleSize - centerDotSize) / 2
+            const dotY = cy + (handleSize - centerDotSize) / 2
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.92)`
+            ctx.fillRect(dotX, dotY, centerDotSize, centerDotSize)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.98)'
           })
         }
       })
