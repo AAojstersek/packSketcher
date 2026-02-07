@@ -104,7 +104,6 @@ export default async function DashboardPage() {
                 Billing
               </Link>
             </div>
-            <p className="mt-2 truncate text-xs text-slate-500">{user.email}</p>
           </section>
 
           <div className="grid gap-4 lg:grid-cols-12">
