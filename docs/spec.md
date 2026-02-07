@@ -1,6 +1,6 @@
 \# PackSketcher (MVP) — Developer-Ready Specification
 
-Last updated: 2026-02-06
+Last updated: 2026-02-07
 
 ## 1) Goal + Scope
 Build a responsive web app (desktop + mobile) that lets authenticated users visually plan where **Boxes** go on a **Workspace** (background image), then manage **Items** inside each Box, including:
@@ -10,7 +10,6 @@ Build a responsive web app (desktop + mobile) that lets authenticated users visu
 - Custom background upload + workspace rename on dashboard
 
 Out of scope for MVP:
-- Subscriptions/membership
 - Export/print
 - Public sharing
 
@@ -19,6 +18,7 @@ UI language: English.
 Extension track (planned next phases):
 - Phase 12: custom background upload and workspace rename.
 - Phase 13: full visual redesign of details panel (clean/minimal, Apple-style).
+- Phase 14: access control + paid subscriptions (Stripe billing, beta invites, app gating).
 
 ## 2) Terminology
 - **Workspace**: a background “board” the user works on (DB: `backgrounds` + its `packs` row).

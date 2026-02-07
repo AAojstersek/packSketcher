@@ -28,6 +28,19 @@ export interface UndoMoveItemsBulkResult {
   error?: string
 }
 
+interface MoveItemsBulkRpcRow {
+  moved_count?: unknown
+  movedCount?: unknown
+  moved?: unknown
+  conflicts?: unknown
+  undo?: unknown
+}
+
+interface UndoMoveItemsBulkRpcRow {
+  moved_count?: unknown
+  conflicts?: unknown
+}
+
 /**
   * Move items via the move_items_bulk RPC and map conflicts into friendly messages.
   */
@@ -47,8 +60,8 @@ export async function moveItemsBulk(
     return { movedCount: 0, conflicts: [], undo: [], error: friendlyMoveError(error.message) }
   }
 
-  const row = extractFirstRow(data)
-  const undo = mapUndo((row as { undo?: unknown } | null)?.undo)
+  const row = extractFirstRow<MoveItemsBulkRpcRow>(data)
+  const undo = mapUndo(row?.undo)
   return {
     movedCount: extractMovedCount(row, undo),
     conflicts: mapConflicts(row?.conflicts),
@@ -75,9 +88,10 @@ export async function undoMoveItemsBulk(
     return { movedCount: 0, conflicts: [], error: friendlyUndoError(error.message) }
   }
 
-  const row = extractFirstRow(data)
+  const row = extractFirstRow<UndoMoveItemsBulkRpcRow>(data)
+  const movedCount = toNonNegativeNumber(row?.moved_count) ?? 0
   return {
-    movedCount: row?.moved_count ?? 0,
+    movedCount,
     conflicts: mapConflicts(row?.conflicts),
   }
 }
@@ -111,16 +125,19 @@ function mapConflicts(conflicts: unknown): MoveItemsBulkConflict[] {
 
   return conflicts
     .map((conflict) => {
-      const itemId = (conflict as any)?.item_id ?? (conflict as any)?.id
-      const name = (conflict as any)?.name
-      const reason = (conflict as any)?.reason as MoveItemsBulkConflictReason | undefined
+      const record = asRecord(conflict)
+      if (!record) return null
+
+      const itemId = asNonEmptyString(record['item_id']) ?? asNonEmptyString(record['id'])
+      const name = asNonEmptyString(record['name'])
+      const reason = normalizeReason(record['reason'])
 
       if (!itemId || !name) return null
 
       return {
         itemId,
         name,
-        reason: normalizeReason(reason),
+        reason,
         message: conflictMessage(reason, name),
       }
     })
@@ -131,9 +148,12 @@ function mapUndo(undo: unknown): MoveItemsBulkUndo[] {
   if (!Array.isArray(undo)) return []
   return undo
     .map((entry) => {
-      const itemId = (entry as any)?.id ?? (entry as any)?.item_id
-      const fromBagId = (entry as any)?.from_bag_id
-      const fromName = (entry as any)?.from_name
+      const record = asRecord(entry)
+      if (!record) return null
+
+      const itemId = asNonEmptyString(record['id']) ?? asNonEmptyString(record['item_id'])
+      const fromBagId = asNonEmptyString(record['from_bag_id'])
+      const fromName = asNonEmptyString(record['from_name'])
       if (!itemId || !fromBagId || !fromName) return null
       return {
         itemId,
@@ -144,13 +164,32 @@ function mapUndo(undo: unknown): MoveItemsBulkUndo[] {
     .filter((e): e is MoveItemsBulkUndo => Boolean(e))
 }
 
-function normalizeReason(reason?: MoveItemsBulkConflictReason): MoveItemsBulkConflictReason {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
+function toNonNegativeNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return parsed
+}
+
+function normalizeReason(reason: unknown): MoveItemsBulkConflictReason {
   if (reason === 'duplicate_in_selection') return 'duplicate_in_selection'
   if (reason === 'name_conflict') return 'name_conflict'
   return 'unknown'
 }
 
-function conflictMessage(reason: MoveItemsBulkConflictReason | undefined, name: string): string {
+function conflictMessage(reason: MoveItemsBulkConflictReason, name: string): string {
   if (reason === 'duplicate_in_selection') {
     return `Selected items include duplicate names after rename: "${name}".`
   }

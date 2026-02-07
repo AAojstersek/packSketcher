@@ -7,6 +7,7 @@ import { ActivityFeed } from './ActivityFeed'
 import { UploadCustomBackgroundButton } from './UploadCustomBackgroundButton'
 import type { Background } from '@/types'
 import type { ActivityResponse } from '@/lib/activities'
+import { accessStateLabel, getAccessState } from '@/lib/access/entitlements'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -37,6 +38,8 @@ export default async function DashboardPage() {
     // This should be handled by middleware, but just in case
     return <div>Please log in</div>
   }
+
+  const accessState = await getAccessState(supabase, user)
 
   // Fetch dashboard sections via API routes
   let backgrounds: Background[] = []
@@ -91,6 +94,14 @@ export default async function DashboardPage() {
             <p className="mt-1 text-sm text-slate-600">
               Logged in as <span className="font-medium">{user.email}</span>
             </p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-700">
+                {accessStateLabel(accessState)}
+              </span>
+              <Link href="/billing" className="underline-offset-2 hover:underline">
+                Billing
+              </Link>
+            </div>
           </div>
           <LogoutButton />
         </div>

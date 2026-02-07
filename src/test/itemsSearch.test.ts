@@ -52,4 +52,35 @@ describe('shapeItemsSearchResults', () => {
     const shaped = shapeItemsSearchResults([missingWorkspace])
     expect(shaped).toEqual([])
   })
+
+  it('maps array-shaped nested relations from Supabase', () => {
+    const arrayRow: RawItemsSearchRow = {
+      name: 'Tube',
+      bag_id: 'bag-2',
+      bags: [
+        {
+          id: 'bag-2',
+          name: 'Rear Box',
+          pack_id: 'pack-2',
+          packs: [
+            {
+              background_id: 'bg-2',
+              backgrounds: [{ id: 'bg-2', name: 'Race Bike' }],
+            },
+          ],
+        },
+      ],
+    }
+
+    const shaped = shapeItemsSearchResults([arrayRow])
+    expect(shaped).toEqual([
+      {
+        itemName: 'Tube',
+        workspaceName: 'Race Bike',
+        boxName: 'Rear Box',
+        backgroundId: 'bg-2',
+        bagId: 'bag-2',
+      },
+    ])
+  })
 })

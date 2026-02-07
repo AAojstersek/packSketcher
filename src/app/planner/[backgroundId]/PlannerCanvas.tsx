@@ -51,6 +51,7 @@ const LONG_PRESS_MOVE_TOLERANCE = 10
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_MAX_DISTANCE_PX = 24
 type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br'
+type TouchPoint = { clientX: number; clientY: number }
 
 interface ResizeStart {
   startX: number
@@ -61,11 +62,11 @@ interface ResizeStart {
   origH: number
 }
 
-function getTouchDistance(a: Touch, b: Touch): number {
+function getTouchDistance(a: TouchPoint, b: TouchPoint): number {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
 }
 
-function getTouchCenter(a: Touch, b: Touch): { x: number; y: number } {
+function getTouchCenter(a: TouchPoint, b: TouchPoint): { x: number; y: number } {
   return {
     x: (a.clientX + b.clientX) / 2,
     y: (a.clientY + b.clientY) / 2,

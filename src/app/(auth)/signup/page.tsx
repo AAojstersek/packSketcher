@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/browser'
 
 export default function SignupPage() {
+  const signupDisabled = process.env.NEXT_PUBLIC_SIGNUP_DISABLED === 'true'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -14,6 +15,10 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (signupDisabled) {
+      setError('Sign-up is currently invite-only.')
+      return
+    }
     setLoading(true)
     setError('')
     setSuccess('')
@@ -33,7 +38,7 @@ export default function SignupPage() {
         // Email confirmation required
         setSuccess('Check your email for the confirmation link.')
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -49,6 +54,12 @@ export default function SignupPage() {
           </h2>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {signupDisabled && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Sign-up is currently invite-only. Contact the admin for access.
+            </div>
+          )}
+
           <div className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-900">
@@ -59,6 +70,7 @@ export default function SignupPage() {
                 name="email"
                 type="email"
                 required
+                disabled={signupDisabled}
                 className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 focus:outline-none"
                 placeholder="Enter your email"
                 value={email}
@@ -74,6 +86,7 @@ export default function SignupPage() {
                 name="password"
                 type="password"
                 required
+                disabled={signupDisabled}
                 className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-200 focus:outline-none"
                 placeholder="Enter your password"
                 value={password}
@@ -97,10 +110,11 @@ export default function SignupPage() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || signupDisabled}
+              aria-disabled={signupDisabled}
               className="w-full flex justify-center rounded-lg border border-transparent bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2 disabled:opacity-50"
             >
-              {loading ? 'Creating account…' : 'Sign up'}
+              {signupDisabled ? 'Invite only' : loading ? 'Creating account…' : 'Sign up'}
             </button>
           </div>
 

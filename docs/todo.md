@@ -290,3 +290,35 @@ Last updated: 2026-02-06
 - [x] Add sticky action/footer behavior where appropriate (desktop + mobile).
 - [x] Preserve all existing behaviors (save/cancel, unsaved guard, conflict flow, undo, keyboard accessibility).
 - [x] Add/adjust component tests for redesigned structure and interactions.
+
+## Phase 14 — Access + Billing
+### Production foundation
+- [ ] Create dedicated Supabase production project.
+- [ ] Create dedicated Vercel production project and custom domain.
+- [x] Add SQL migration file for access/billing model (`supabase/migrations/20260207113000_access_and_billing.sql`).
+- [ ] Configure production env vars and auth redirect URLs.
+
+### Access model
+- [x] Add billing + beta access tables (`billing_customers`, `billing_subscriptions`, `billing_events`, `beta_invites`, `beta_memberships`).
+- [x] Add DB access decision functions (`get_access_state`, `has_app_access`) and `app_access` view.
+- [x] Add RLS policies for user-owned billing/access reads.
+- [x] Add app-level access states (`no_access`, `beta_access`, `active_subscription`, `past_due`, `canceled`) in TypeScript.
+
+### Billing routes + UI
+- [x] Add checkout route (`POST /api/billing/checkout`).
+- [x] Add billing portal route (`POST /api/billing/portal`).
+- [x] Add Stripe webhook route with idempotency (`POST /api/billing/webhook`).
+- [x] Add app routes `/subscribe`, `/billing`, `/access-denied`.
+
+### Invite-only beta
+- [x] Add admin invite API (`POST /api/admin/invites`) for email-based beta invites.
+- [ ] Disable open self-signup in production during beta window.
+
+### App gating
+- [x] Extend `src/proxy.ts` to gate `/dashboard` + `/planner` by entitlement.
+- [x] Add billing status visibility in dashboard header.
+
+### Launch ops
+- [x] Add backup/restore runbook (`docs/phase14_launch_ops.md`).
+- [ ] Add monitoring/alerts (webhook failures, auth, subscription sync).
+- [ ] Add legal pages (Terms, Privacy, Refund policy).

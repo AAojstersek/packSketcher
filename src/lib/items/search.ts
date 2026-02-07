@@ -11,6 +11,8 @@ export interface ItemsSearchResult {
   bagId: string
 }
 
+type MaybeArray<T> = T | T[] | null | undefined
+
 interface RawBackground {
   id?: string
   name?: string
@@ -18,14 +20,14 @@ interface RawBackground {
 
 interface RawPack {
   background_id?: string
-  backgrounds?: RawBackground | null
+  backgrounds?: MaybeArray<RawBackground>
 }
 
 interface RawBag {
   id?: string
   name?: string
   pack_id?: string
-  packs?: RawPack | null
+  packs?: MaybeArray<RawPack>
 }
 
 export interface RawItemsSearchRow {
@@ -33,7 +35,14 @@ export interface RawItemsSearchRow {
   description?: string | null
   last_moved_at?: string | null
   bag_id?: string
-  bags?: RawBag | null
+  bags?: MaybeArray<RawBag>
+}
+
+function pickOne<T>(value: MaybeArray<T>): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null
+  }
+  return value ?? null
 }
 
 /**
@@ -55,10 +64,11 @@ export function parseItemsSearchQuery(raw: string | null): ItemsSearchParams {
 export function shapeItemsSearchResults(rows: RawItemsSearchRow[]): ItemsSearchResult[] {
   return rows
     .map((row) => {
-      const bag = row.bags
-      const pack = bag?.packs
+      const bag = pickOne(row.bags)
+      const pack = pickOne(bag?.packs)
       const backgroundId = pack?.background_id
-      const workspaceName = pack?.backgrounds?.name
+      const background = pickOne(pack?.backgrounds)
+      const workspaceName = background?.name
 
       if (!row.name || !bag?.id || !bag.name || !backgroundId || !workspaceName) {
         return null

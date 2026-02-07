@@ -75,3 +75,19 @@ export interface Activity {
   message: string
   created_at: string
 }
+
+export type SubscriptionStatus =
+  | 'incomplete'
+  | 'incomplete_expired'
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'canceled'
+  | 'unpaid'
+
+export type AccessState =
+  | 'no_access'
+  | 'beta_access'
+  | 'active_subscription'
+  | 'past_due'
+  | 'canceled'

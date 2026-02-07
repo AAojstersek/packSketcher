@@ -52,8 +52,8 @@ describe('UploadCustomBackgroundButton', () => {
     const user = userEvent.setup()
     vi.mocked(readImageDimensions).mockResolvedValue({ width: 1920, height: 1080 })
 
-    let resolveFetch: ((value: unknown) => void) | null = null
-    const pendingFetch = new Promise((resolve) => {
+    let resolveFetch: ((value: { ok: boolean; json: () => Promise<{ id: string }> }) => void) | undefined
+    const pendingFetch = new Promise<{ ok: boolean; json: () => Promise<{ id: string }> }>((resolve) => {
       resolveFetch = resolve
     })
     const fetchMock = vi.fn().mockReturnValue(pendingFetch)
@@ -72,7 +72,10 @@ describe('UploadCustomBackgroundButton', () => {
     expect(screen.getByRole('button', { name: 'Uploading…' })).toBeDisabled()
     expect(fetchMock).toHaveBeenCalledWith('/api/backgrounds', expect.objectContaining({ method: 'POST' }))
 
-    resolveFetch?.({
+    if (!resolveFetch) {
+      throw new Error('fetch resolver not initialized')
+    }
+    resolveFetch({
       ok: true,
       json: vi.fn().mockResolvedValue({ id: 'bg-1' }),
     })

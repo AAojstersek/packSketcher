@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 
 const resetPasswordForEmail = vi.fn()
 const updateUser = vi.fn()
+const signUp = vi.fn()
 const replace = vi.fn()
 
 vi.mock('@/lib/supabase/browser', () => ({
@@ -11,6 +12,7 @@ vi.mock('@/lib/supabase/browser', () => ({
     auth: {
       resetPasswordForEmail,
       updateUser,
+      signUp,
     },
   },
 }))
@@ -115,10 +117,37 @@ describe('reset password page', () => {
 })
 
 describe('proxy matcher', () => {
-  it('includes forgot/reset routes', async () => {
+  it('includes auth + billing access routes', async () => {
     const { config } = await import('@/proxy')
     expect(config.matcher).toEqual(
-      expect.arrayContaining(['/forgot-password', '/reset-password'])
+      expect.arrayContaining([
+        '/forgot-password',
+        '/reset-password',
+        '/subscribe',
+        '/billing',
+        '/access-denied',
+      ])
     )
+  })
+})
+
+describe('signup invite-only mode', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    process.env.NEXT_PUBLIC_SIGNUP_DISABLED = 'true'
+  })
+
+  it('disables sign-up form when invite-only is enabled', async () => {
+    const mod = await import('@/app/(auth)/signup/page')
+    const SignupPage = mod.default
+    render(<SignupPage />)
+    const user = userEvent.setup()
+
+    const button = screen.getByRole('button', { name: /invite only/i })
+    expect(button).toBeDisabled()
+
+    await user.click(button)
+    expect(signUp).not.toHaveBeenCalled()
+    await screen.findByText(/sign-up is currently invite-only/i)
   })
 })
