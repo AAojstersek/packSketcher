@@ -152,8 +152,8 @@ describe('Planner unsaved changes guard', () => {
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
     await screen.findByLabelText('Bag details panel')
 
-    await user.clear(screen.getByLabelText('Bag name'))
-    await user.type(screen.getByLabelText('Bag name'), 'Changed Box')
+    await user.clear(screen.getByLabelText('Box name'))
+    await user.type(screen.getByLabelText('Box name'), 'Changed Box')
 
     await user.click(screen.getByRole('button', { name: 'Close panel' }))
     const guardDialog = await screen.findByRole('dialog', { name: 'Unsaved changes' })
@@ -186,7 +186,7 @@ describe('Planner unsaved changes guard', () => {
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
     await screen.findByLabelText('Bag details panel')
-    await user.type(screen.getByLabelText('Bag name'), ' dirty')
+    await user.type(screen.getByLabelText('Box name'), ' dirty')
 
     expect(registeredHandler).toBeTypeOf('function')
     await act(async () => {
@@ -220,7 +220,7 @@ describe('Planner unsaved changes guard', () => {
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
     await screen.findByLabelText('Bag details panel')
-    await user.type(screen.getByLabelText('Bag name'), ' dirty')
+    await user.type(screen.getByLabelText('Box name'), ' dirty')
 
     expect(registeredMoveHandler).toBeTypeOf('function')
     await act(async () => {

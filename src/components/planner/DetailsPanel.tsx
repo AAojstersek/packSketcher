@@ -537,7 +537,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [enableEscapeClose, onClose])
 
-  // When switching to Edit mode and bag exists, focus the Bag name input
+  // When switching to Edit mode and bag exists, focus the Box name input
   useEffect(() => {
     if (!isEditMode || !bag) return
     const id = requestAnimationFrame(() => nameInputRef.current?.focus())
@@ -937,7 +937,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     clearSaveError?.()
     const name = normalizeBagName(draft.name)
     if (!name) {
-      setValidationError('Bag name is required')
+      setValidationError('Box name is required')
       return false
     }
     const invalidItemIndex = draftItems.findIndex(
@@ -1197,7 +1197,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-0 flex-1">
                   <label htmlFor="details-bag-name" className="mb-1 block text-xs font-medium text-slate-500">
-                    Bag name
+                    Box name
                   </label>
                   <input
                     id="details-bag-name"

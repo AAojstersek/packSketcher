@@ -202,6 +202,6 @@ describe('Planner optimistic rollback', () => {
     })
 
     expect(screen.getByRole('button', { name: /Open details for Box 1/i })).toBeInTheDocument()
-    expect(screen.getByLabelText('Bag name')).toHaveValue('Box 1')
+    expect(screen.getByLabelText('Box name')).toHaveValue('Box 1')
   })
 })

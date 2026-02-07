@@ -151,7 +151,7 @@ describe('DetailsPanel save flow', () => {
 
     await screen.findByText('Tent')
 
-    const nameInput = screen.getByLabelText('Bag name')
+    const nameInput = screen.getByLabelText('Box name')
     await user.clear(nameInput)
     await user.type(nameInput, 'Renamed Box')
     await user.click(screen.getByRole('button', { name: 'Save' }))

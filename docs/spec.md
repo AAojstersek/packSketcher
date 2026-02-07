@@ -139,7 +139,7 @@ Clicking a result:
 View mode:
 - Tap/click selects a box.
 - Desktop: double-click opens details panel (read-only).
-- Mobile: open panel via gear icon on selected box.
+- Mobile: double-tap selected box opens details panel (within 300 ms and 24 px).
 
 Edit mode:
 - Can add/move/resize/reorder/delete boxes.
@@ -174,7 +174,8 @@ Pan/zoom on mobile:
 
 ### 7.5 Details Panel Opening
 - Desktop: double-click OR gear icon overlay on selected box.
-- Mobile: gear icon overlay on selected box.
+- Mobile: double-tap selected box (within 300 ms and 24 px).
+- Mobile: no gear icon trigger.
 - Overlay click closes panel.
 - Esc closes panel (desktop; mobile only with hardware keyboard).
 - If panel is open and user selects another box: panel stays on current box.

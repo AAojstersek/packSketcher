@@ -48,6 +48,8 @@ function getRenderOrderedItems(items: Bag[]): Bag[] {
 
 const LONG_PRESS_MS = 550
 const LONG_PRESS_MOVE_TOLERANCE = 10
+const DOUBLE_TAP_MS = 300
+const DOUBLE_TAP_MAX_DISTANCE_PX = 24
 type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br'
 
 interface ResizeStart {
@@ -201,6 +203,12 @@ export function PlannerCanvas({
   const touchResizeStateRef = useRef<{
     bagId: string
     handle: ResizeHandle
+  } | null>(null)
+  const lastTapRef = useRef<{
+    bagId: string
+    clientX: number
+    clientY: number
+    timestamp: number
   } | null>(null)
   const pinchStateRef = useRef<{
     startDistance: number
@@ -1617,25 +1625,57 @@ export function PlannerCanvas({
     }
     if (suppressNextClickRef.current) {
       suppressNextClickRef.current = false
+      lastTapRef.current = null
       return
     }
     if (didDragRef.current) {
       didDragRef.current = false
+      lastTapRef.current = null
       return
     }
     if (didResizeRef.current) {
       didResizeRef.current = false
+      lastTapRef.current = null
       return
     }
     const canvas = canvasRef.current
     const img = imageRef.current
-    if (!canvas || !img || !imageLoaded || !userId) return
+    if (!canvas || !img || !imageLoaded) return
 
     const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
 
     // Hit test: clicking on an item selects it only (no add-item)
     const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
     if (hitId != null) {
+      if (isCoarsePointer) {
+        const previousTap = lastTapRef.current
+        const now = Date.now()
+        const isDoubleTap =
+          previousTap != null &&
+          previousTap.bagId === hitId &&
+          now - previousTap.timestamp <= DOUBLE_TAP_MS &&
+          Math.hypot(e.clientX - previousTap.clientX, e.clientY - previousTap.clientY) <=
+            DOUBLE_TAP_MAX_DISTANCE_PX
+
+        setSelectedItemId(hitId)
+        if (highlightBagId !== hitId) {
+          onHighlightBagIdChange(null)
+        }
+
+        if (isDoubleTap) {
+          openDetailsForBag(hitId)
+          lastTapRef.current = null
+          return
+        }
+
+        lastTapRef.current = {
+          bagId: hitId,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          timestamp: now,
+        }
+        return
+      }
       setSelectedItemId(hitId)
       if (highlightBagId !== hitId) {
         onHighlightBagIdChange(null)
@@ -1646,6 +1686,7 @@ export function PlannerCanvas({
     // Click on empty space: clear selection only (add box comes from header button).
     setSelectedItemId(null)
     onHighlightBagIdChange(null)
+    lastTapRef.current = null
   }
 
   const handleCanvasDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1855,7 +1896,7 @@ export function PlannerCanvas({
             onClick={handleCanvasClick}
             onDoubleClick={handleCanvasDoubleClick}
           />
-          {selectedItem && selectedItemGearAnchor && (
+          {!isCoarsePointer && selectedItem && selectedItemGearAnchor && (
             <button
               type="button"
               className="absolute z-20 -translate-x-[calc(100%+6px)] translate-y-1 inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent p-0 text-black transition-colors hover:text-black focus:outline-none focus:ring-2 focus:ring-slate-300"

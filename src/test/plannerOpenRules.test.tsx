@@ -150,22 +150,60 @@ describe('Planner open/close rules', () => {
     })
   })
 
-  it('mobile: does not open details on double-click, opens with gear', async () => {
-    const user = userEvent.setup()
+  it('mobile: opens details on double-tap and does not render gear', async () => {
     const { container } = renderCanvas('bag-1', true)
     loadPlannerImage()
 
     const canvas = container.querySelector('canvas')
     expect(canvas).toBeTruthy()
-    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
+    expect(screen.queryByRole('button', { name: /Open details for Box 1/i })).not.toBeInTheDocument()
+
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
 
     await waitFor(() => {
       expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
 
-    const gearButton = await screen.findByRole('button', { name: /Open details for Box 1/i })
-    await user.click(gearButton)
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 146, clientY: 136 })
     await screen.findByLabelText('Bag details panel')
+  })
+
+  it('mobile: does not open details when taps are too far apart in time', async () => {
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const { container } = renderCanvas('bag-1', true)
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
+    now = 1401
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 141, clientY: 131 })
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
+    })
+  })
+
+  it('mobile: does not open details when second tap hits another box', async () => {
+    let now = 1000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const { container } = renderCanvas('bag-1', true)
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
+    now = 1200
+    fireEvent.click(canvas as HTMLCanvasElement, { clientX: 420, clientY: 150 })
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
+    })
   })
 
   it('keeps panel on current box when selection changes', async () => {
@@ -175,7 +213,7 @@ describe('Planner open/close rules', () => {
 
     await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
     await screen.findByLabelText('Bag details panel')
-    expect(screen.getByLabelText('Bag name')).toHaveValue('Box 1')
+    expect(screen.getByLabelText('Box name')).toHaveValue('Box 1')
 
     rerender(
       <PlannerCanvas
@@ -194,6 +232,6 @@ describe('Planner open/close rules', () => {
       />
     )
 
-    expect(screen.getByLabelText('Bag name')).toHaveValue('Box 1')
+    expect(screen.getByLabelText('Box name')).toHaveValue('Box 1')
   })
 })

@@ -141,7 +141,7 @@ describe('DetailsPanel visual structure and landmarks', () => {
     expect(screen.getByRole('region', { name: 'Totals' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Save actions' })).toBeInTheDocument()
 
-    expect(screen.getByLabelText('Bag name')).toBeInTheDocument()
+    expect(screen.getByLabelText('Box name')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
   })

@@ -50,7 +50,7 @@ Last updated: 2026-02-06
 5. Add context menu reorder/delete (desktop + mobile).
 
 ## Phase 5 — Details Panel
-1. Enforce open/close rules (gear icon, overlay, Esc).
+1. Enforce open/close rules (desktop gear/double-click, mobile double-tap, overlay, Esc).
 2. Manual Save/Cancel with `save_bag_details` RPC.
 3. Totals (weight + count) and inline validation errors.
 4. Unsaved changes guard.
@@ -115,7 +115,7 @@ Last updated: 2026-02-06
 14. Planner: add Add Box button, default box creation, remove click-to-add.
 15. Planner: label rendering + truncation + z-index ordering.
 16. Planner: context menu reorder/delete + RPC wiring.
-17. Planner: gear icon overlay to open details panel.
+17. Planner: details panel open rules (desktop gear/double-click, mobile double-tap only).
 18. Details panel: enforce edit/view behavior + save/cancel + totals.
 19. Details panel: unsaved changes guard.
 20. Items: multi-select + bulk move + conflict handling.
@@ -406,18 +406,19 @@ Tests:
 - Unit tests for reorder boundary logic.
 ```
 
-## Prompt 16 — Planner: Gear Icon + Open Rules
+## Prompt 16 — Planner: Open Rules
 ```
-Add gear icon overlay and enforce open rules.
+Enforce details panel open rules.
 
 Where:
 - `src/app/planner/[backgroundId]/PlannerCanvas.tsx`
 - `src/components/planner/DetailsPanel.tsx`
 
 Requirements:
-- Gear icon appears on selected box (desktop + mobile).
+- Gear icon appears on selected box on desktop.
 - Desktop: double-click OR gear opens details.
-- Mobile: gear only.
+- Mobile: double-tap selected box opens details (300 ms / 24 px threshold).
+- Mobile: no gear trigger.
 - Overlay click closes panel; Esc closes on desktop.
 - If panel open and user selects another box, panel stays on current box.
 
