@@ -188,11 +188,11 @@ describe('Planner optimistic rollback', () => {
     )
 
     loadPlannerImage()
-    await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
-    await screen.findByLabelText('Bag details panel')
-
     const canvas = container.querySelector('canvas')
     expect(canvas).toBeTruthy()
+    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
+    await screen.findByLabelText('Bag details panel')
+
     fireEvent.contextMenu(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }))
@@ -201,7 +201,7 @@ describe('Planner optimistic rollback', () => {
       expect(screen.getByText('Delete failed in DB')).toBeInTheDocument()
     })
 
-    expect(screen.getByRole('button', { name: /Open details for Box 1/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Bag details panel')).toBeInTheDocument()
     expect(screen.getByLabelText('Box name')).toHaveValue('Box 1')
   })
 })

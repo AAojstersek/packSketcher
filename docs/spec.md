@@ -173,10 +173,11 @@ Pan/zoom on mobile:
 - One finger reserved for box interactions.
 
 ### 7.5 Details Panel Opening
-- Desktop: double-click OR gear icon overlay on selected box.
+- Desktop: double-click on selected box.
 - Mobile: double-tap selected box (within 300 ms and 24 px).
 - Mobile: no gear icon trigger.
-- Overlay click closes panel.
+- Desktop: overlay click closes panel.
+- Mobile: close via Close button only.
 - Esc closes panel (desktop; mobile only with hardware keyboard).
 - If panel is open and user selects another box: panel stays on current box.
 

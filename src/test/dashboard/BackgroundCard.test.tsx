@@ -45,6 +45,20 @@ beforeEach(() => {
   dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
 })
 
+describe('BackgroundCard action placement', () => {
+  it('positions rename in top-left and delete in top-right', () => {
+    render(<BackgroundCard bg={mockBackground} />)
+
+    const renameButton = screen.getByRole('button', { name: /rename workspace/i })
+    const deleteButton = screen.getByRole('button', { name: /delete workspace/i })
+    const renameWrapper = renameButton.closest('div')
+    const deleteWrapper = deleteButton.closest('div')
+
+    expect(renameWrapper).toHaveClass('absolute', 'top-2', 'left-2')
+    expect(deleteWrapper).toHaveClass('absolute', 'top-2', 'right-2')
+  })
+})
+
 describe('BackgroundCard delete button', () => {
   it('calls delete endpoint and refreshes when confirmed', async () => {
     const user = userEvent.setup()

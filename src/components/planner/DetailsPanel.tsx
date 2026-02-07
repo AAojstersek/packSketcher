@@ -1081,7 +1081,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
 
   return (
     <aside
-      className="fixed inset-x-0 bottom-0 z-20 flex h-[92dvh] w-full flex-col rounded-t-2xl border border-b-0 border-slate-200 bg-slate-50/95 shadow-2xl backdrop-blur-sm md:inset-x-auto md:right-0 md:top-0 md:h-[100dvh] md:w-[23rem] md:max-w-[94vw] md:rounded-none md:border-b md:border-l md:border-r-0 md:border-t-0"
+      className="fixed inset-0 z-20 flex h-[100dvh] w-full flex-col rounded-none border border-slate-200 bg-slate-50/95 shadow-2xl backdrop-blur-sm md:inset-x-auto md:right-0 md:top-0 md:h-[100dvh] md:w-[23rem] md:max-w-[94vw] md:rounded-none md:border-b md:border-l md:border-r-0 md:border-t-0"
       data-details-panel
       aria-label="Bag details panel"
     >
@@ -1128,7 +1128,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           )}
         </header>
       )}
-      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 pb-24 pt-0.5 md:px-4 md:pb-28 md:pt-1">
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-3 pb-24 pt-3 md:px-4 md:pb-28 md:pt-1">
         {SHOW_DEBUG && (
           <section className="rounded-2xl border border-slate-200 bg-white p-3">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1227,36 +1227,38 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                   />
                 </div>
               </div>
-              <div className="mt-3">
-                <p className="mb-1.5 text-xs font-medium text-slate-500">Color</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {PRESET_COLORS.map(({ label, value }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className="h-7 w-7 rounded-full border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
-                      style={{
-                        backgroundColor: value,
-                        ...(displayColor.toLowerCase() === value.toLowerCase()
-                          ? { boxShadow: '0 0 0 2px white, 0 0 0 3px #94a3b8' }
-                          : {}),
-                      }}
-                      title={label}
-                      onClick={() => handleColorChange(value)}
+              {isEditMode && (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-xs font-medium text-slate-500">Color</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {PRESET_COLORS.map(({ label, value }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className="h-7 w-7 rounded-full border border-slate-200 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-1 disabled:pointer-events-none disabled:opacity-50"
+                        style={{
+                          backgroundColor: value,
+                          ...(displayColor.toLowerCase() === value.toLowerCase()
+                            ? { boxShadow: '0 0 0 2px white, 0 0 0 3px #94a3b8' }
+                            : {}),
+                        }}
+                        title={label}
+                        onClick={() => handleColorChange(value)}
+                        disabled={readonly || isSaving}
+                        aria-pressed={displayColor.toLowerCase() === value.toLowerCase()}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      className="h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-slate-200 disabled:pointer-events-none disabled:opacity-50"
+                      value={displayColor}
+                      onChange={(e) => handleColorChange(e.target.value)}
                       disabled={readonly || isSaving}
-                      aria-pressed={displayColor.toLowerCase() === value.toLowerCase()}
+                      aria-label="Custom color"
                     />
-                  ))}
-                  <input
-                    type="color"
-                    className="h-7 w-7 cursor-pointer overflow-hidden rounded-full border border-slate-200 disabled:pointer-events-none disabled:opacity-50"
-                    value={displayColor}
-                    onChange={(e) => handleColorChange(e.target.value)}
-                    disabled={readonly || isSaving}
-                    aria-label="Custom color"
-                  />
+                  </div>
                 </div>
-              </div>
+              )}
             </section>
 
             <section

@@ -166,9 +166,10 @@ Last updated: 2026-02-06
 
 ## Phase 6 — Details Panel (Prompts 16–18)
 ### Open/Close Rules (Prompt 16)
-- [x] Desktop: double-click OR gear icon overlay to open.
+- [x] Desktop: double-click only.
 - [x] Mobile: double-tap selected box only (300 ms / 24 px); no gear trigger.
-- [x] Overlay click closes.
+- [x] Desktop: overlay click closes.
+- [x] Mobile: close via Close button only.
 - [x] Esc closes (desktop).
 - [x] If panel open and user selects another box, panel stays on current box.
 

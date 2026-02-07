@@ -124,13 +124,14 @@ describe('Planner open/close rules', () => {
     vi.restoreAllMocks()
   })
 
-  it('desktop: opens details by double-click, closes by overlay and Escape', async () => {
+  it('desktop: opens details by double-click only, closes by overlay and Escape', async () => {
     const user = userEvent.setup()
     const { container } = renderCanvas('bag-1', false)
     loadPlannerImage()
 
     const canvas = container.querySelector('canvas')
     expect(canvas).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Open details for Box 1/i })).not.toBeInTheDocument()
     fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
 
     await screen.findByLabelText('Bag details panel')
@@ -140,10 +141,6 @@ describe('Planner open/close rules', () => {
       expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
     })
 
-    const gearButton = await screen.findByRole('button', { name: /Open details for Box 1/i })
-    await user.click(gearButton)
-    await screen.findByLabelText('Bag details panel')
-
     fireEvent.keyDown(window, { key: 'Escape' })
     await waitFor(() => {
       expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
@@ -151,6 +148,7 @@ describe('Planner open/close rules', () => {
   })
 
   it('mobile: opens details on double-tap and does not render gear', async () => {
+    const user = userEvent.setup()
     const { container } = renderCanvas('bag-1', true)
     loadPlannerImage()
 
@@ -166,6 +164,12 @@ describe('Planner open/close rules', () => {
 
     fireEvent.click(canvas as HTMLCanvasElement, { clientX: 146, clientY: 136 })
     await screen.findByLabelText('Bag details panel')
+    expect(screen.queryByRole('button', { name: 'Close panel' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Bag details panel')).not.toBeInTheDocument()
+    })
   })
 
   it('mobile: does not open details when taps are too far apart in time', async () => {
@@ -207,11 +211,12 @@ describe('Planner open/close rules', () => {
   })
 
   it('keeps panel on current box when selection changes', async () => {
-    const user = userEvent.setup()
-    const { rerender } = renderCanvas('bag-1', false)
+    const { container, rerender } = renderCanvas('bag-1', false)
     loadPlannerImage()
 
-    await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
     await screen.findByLabelText('Bag details panel')
     expect(screen.getByLabelText('Box name')).toHaveValue('Box 1')
 

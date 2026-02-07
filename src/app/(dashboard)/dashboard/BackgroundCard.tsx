@@ -174,7 +174,7 @@ export function BackgroundCard({ bg }: BackgroundCardProps) {
           </p>
         </div>
       </Link>
-      <div className="absolute top-2 right-2 flex items-center gap-1">
+      <div className="absolute top-2 left-2">
         <button
           type="button"
           className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
@@ -185,6 +185,8 @@ export function BackgroundCard({ bg }: BackgroundCardProps) {
         >
           <PencilIcon />
         </button>
+      </div>
+      <div className="absolute top-2 right-2">
         <button
           type="button"
           className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-50"

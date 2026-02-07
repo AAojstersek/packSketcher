@@ -146,10 +146,12 @@ describe('Planner unsaved changes guard', () => {
 
   it('guards close panel and supports Cancel/Discard choices', async () => {
     const user = userEvent.setup()
-    renderCanvas(() => {})
+    const { container } = renderCanvas(() => {})
     loadPlannerImage()
 
-    await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
     await screen.findByLabelText('Bag details panel')
 
     await user.clear(screen.getByLabelText('Box name'))
@@ -179,12 +181,14 @@ describe('Planner unsaved changes guard', () => {
     const onToggleEditMode = vi.fn()
     let registeredHandler: (() => void) | null = null
 
-    renderCanvas(onToggleEditMode, (handler) => {
+    const { container } = renderCanvas(onToggleEditMode, (handler) => {
       registeredHandler = handler
     })
     loadPlannerImage()
 
-    await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
     await screen.findByLabelText('Bag details panel')
     await user.type(screen.getByLabelText('Box name'), ' dirty')
 
@@ -209,7 +213,7 @@ describe('Planner unsaved changes guard', () => {
       | ((action: () => Promise<void> | void) => void)
       | null = null
 
-    renderCanvas(
+    const { container } = renderCanvas(
       () => {},
       undefined,
       (handler) => {
@@ -218,7 +222,9 @@ describe('Planner unsaved changes guard', () => {
     )
     loadPlannerImage()
 
-    await user.click(await screen.findByRole('button', { name: /Open details for Box 1/i }))
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    fireEvent.doubleClick(canvas as HTMLCanvasElement, { clientX: 140, clientY: 130 })
     await screen.findByLabelText('Bag details panel')
     await user.type(screen.getByLabelText('Box name'), ' dirty')
 

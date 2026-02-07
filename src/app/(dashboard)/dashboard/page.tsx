@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { BackgroundCard } from './BackgroundCard'
 import { LogoutButton } from './LogoutButton'
-import { TemplateGrid } from './TemplateGrid'
+import { TemplatesSection } from './TemplatesSection'
 import { GlobalItemSearch } from './GlobalItemSearch'
 import { ActivityFeed } from './ActivityFeed'
 import { UploadCustomBackgroundButton } from './UploadCustomBackgroundButton'
@@ -101,12 +101,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Background Templates Section */}
-        <div className="mb-12">
-          <h2 className="text-base font-semibold text-slate-900 mb-4">
-            Background Templates
-          </h2>
-          <TemplateGrid templates={LOCAL_TEMPLATES} />
-        </div>
+        <TemplatesSection templates={LOCAL_TEMPLATES} />
 
         {/* Recent Backgrounds Section */}
         <div className="mb-12">

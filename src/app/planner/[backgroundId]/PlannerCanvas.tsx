@@ -72,26 +72,6 @@ function getTouchCenter(a: Touch, b: Touch): { x: number; y: number } {
   }
 }
 
-function GearIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" />
-      <path d="m19.4 15 .8 1.4-1.7 3-1.6-.2a8.2 8.2 0 0 1-2 1.2L14.5 22h-5l-.4-1.6a8.2 8.2 0 0 1-2-1.2l-1.6.2-1.7-3 .8-1.4a8.6 8.6 0 0 1 0-2L3.8 11l1.7-3 1.6.2a8.2 8.2 0 0 1 2-1.2L9.5 5h5l.4 1.6a8.2 8.2 0 0 1 2 1.2l1.6-.2 1.7 3-.8 1.4a8.6 8.6 0 0 1 0 2Z" />
-    </svg>
-  )
-}
-
 interface PlannerCanvasProps {
   imageUrl: string
   name: string
@@ -221,9 +201,6 @@ export function PlannerCanvas({
     detailsItemId != null ? localItems.find((i) => i.id === detailsItemId) ?? null : null
   const selectedItemId = selectedBagId
   const setSelectedItemId = onSelectBagId
-  const selectedItem = selectedItemId
-    ? localItems.find((item) => item.id === selectedItemId) ?? null
-    : null
 
   const MIN_ZOOM = 0.25
   const MAX_ZOOM = 2.5
@@ -1818,19 +1795,6 @@ export function PlannerCanvas({
   const canSendBackward = menuBagId
     ? reorderBagsOneStep(localItems, menuBagId, 'backward').swapped
     : false
-  const selectedItemGearAnchor = (() => {
-    if (!selectedItem || !imageLoaded) return null
-    const imageNaturalWidth = imageNaturalWidthRef.current
-    const imageNaturalHeight = imageNaturalHeightRef.current
-    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return null
-
-    const right = Math.max(0, Math.min(imageNaturalWidth, selectedItem.x + selectedItem.width))
-    const top = Math.max(0, Math.min(imageNaturalHeight, selectedItem.y))
-    return {
-      left: `${(right / imageNaturalWidth) * 100}%`,
-      top: `${(top / imageNaturalHeight) * 100}%`,
-    }
-  })()
 
   return (
     <div className="w-full">
@@ -1896,21 +1860,6 @@ export function PlannerCanvas({
             onClick={handleCanvasClick}
             onDoubleClick={handleCanvasDoubleClick}
           />
-          {!isCoarsePointer && selectedItem && selectedItemGearAnchor && (
-            <button
-              type="button"
-              className="absolute z-20 -translate-x-[calc(100%+6px)] translate-y-1 inline-flex h-7 w-7 items-center justify-center rounded-md border-0 bg-transparent p-0 text-black transition-colors hover:text-black focus:outline-none focus:ring-2 focus:ring-slate-300"
-              style={selectedItemGearAnchor}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                openDetailsForBag(selectedItem.id)
-              }}
-              aria-label={`Open details for ${selectedItem.name}`}
-            >
-              <GearIcon />
-            </button>
-          )}
         </div>
       </div>
       {contextMenu && (
@@ -1948,13 +1897,15 @@ export function PlannerCanvas({
       )}
       {isDetailsOpen && (
         <>
-          <div
-            className="fixed inset-0 bg-black/20 z-10"
-            role="button"
-            tabIndex={-1}
-            onClick={requestCloseDetails}
-            aria-label="Close panel"
-          />
+          {!isCoarsePointer && (
+            <div
+              className="fixed inset-0 bg-black/20 z-10"
+              role="button"
+              tabIndex={-1}
+              onClick={requestCloseDetails}
+              aria-label="Close panel"
+            />
+          )}
           <DetailsPanel
             ref={detailsPanelRef}
             bag={detailsItem}

@@ -146,6 +146,25 @@ describe('DetailsPanel visual structure and landmarks', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
   })
 
+  it('hides color controls in view mode and keeps Box name + kg visible', async () => {
+    render(
+      <DetailsPanel
+        bag={bag}
+        isEditMode={false}
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+        onUpdateBag={() => {}}
+      />
+    )
+
+    await screen.findByText('Tent')
+
+    expect(screen.getByLabelText('Box name')).toBeInTheDocument()
+    expect(screen.getByLabelText('kg')).toBeInTheDocument()
+    expect(screen.queryByText('Color')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Custom color')).not.toBeInTheDocument()
+  })
+
   it('shows bulk move section landmark only while multi-select is enabled', async () => {
     const user = userEvent.setup()
 
