@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/browser'
 
@@ -37,7 +38,17 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="max-w-md w-full space-y-8 p-8 rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div>
+        <div className="space-y-4">
+          <div className="flex flex-col items-center gap-2">
+            <Image
+              src="/logo/PSlogoBlack.svg"
+              alt="PackSketcher logo"
+              width={40}
+              height={40}
+            />
+            <p className="text-2xl font-semibold text-slate-900 tracking-tight">PackSketcher</p>
+            <p className="text-sm text-slate-600">Visual packing planner for bags and gear</p>
+          </div>
           <h2 className="text-center text-xl font-semibold text-slate-900">
             Sign in to your account
           </h2>
