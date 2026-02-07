@@ -56,8 +56,13 @@ export async function proxy(request: NextRequest) {
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname === '/forgot-password' ||
-    pathname === '/reset-password' ||
-    pathname === '/'
+    pathname === '/reset-password'
+
+  if (pathname === '/') {
+    const url = request.nextUrl.clone()
+    url.pathname = user ? '/dashboard' : '/login'
+    return NextResponse.redirect(url)
+  }
 
   if (!user && requiresAuth) {
     const url = request.nextUrl.clone()
