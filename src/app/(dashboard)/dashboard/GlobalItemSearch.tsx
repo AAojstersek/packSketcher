@@ -98,18 +98,30 @@ export function GlobalItemSearch() {
 
   return (
     <div className="relative w-full" ref={containerRef}>
-      <label className="block text-sm font-medium text-slate-800 mb-2">
-        Search items
-      </label>
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setOpen(true)}
-        placeholder="Search items across workspaces"
-        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-slate-400 focus:outline-none"
-        aria-label="Global item search"
-      />
+      <div className="mb-2.5">
+        <label className="block text-sm font-semibold text-slate-900 sm:text-base" htmlFor="global-item-search">
+          Search items
+        </label>
+        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Find any item across all workspaces and open it directly.</p>
+      </div>
+      <div className="relative">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+        >
+          🔍
+        </span>
+        <input
+          id="global-item-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setOpen(true)}
+          placeholder="Search items across workspaces"
+          className="w-full rounded-xl border border-slate-200 bg-white px-10 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-slate-400 focus:outline-none sm:py-2.5"
+          aria-label="Global item search"
+        />
+      </div>
 
       {open && (
         <div

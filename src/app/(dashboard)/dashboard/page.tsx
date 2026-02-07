@@ -9,8 +9,8 @@ import type { Background } from '@/types'
 import type { ActivityResponse } from '@/lib/activities'
 import { accessStateLabel, getAccessState } from '@/lib/access/entitlements'
 import { headers } from 'next/headers'
-import Link from 'next/link'
 import Image from 'next/image'
+import Link from 'next/link'
 
 const LOCAL_TEMPLATES = [
   {
@@ -74,71 +74,75 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 text-xl font-semibold text-slate-900 hover:text-slate-700"
-            >
-              <Image
-                src="/logo/PSlogoBlack.svg"
-                alt=""
-                width={28}
-                height={28}
-                className="shrink-0"
-              />
-              <span>PackSketcher</span>
-            </Link>
-            <p className="mt-1 text-sm text-slate-600">
-              Logged in as <span className="font-medium">{user.email}</span>
-            </p>
-            <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-700">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-6 lg:px-8">
+        <div className="space-y-3 sm:space-y-6">
+          {/* Header */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-3 text-slate-900">
+                  <Image
+                    src="/logo/PSlogoBlack.svg"
+                    alt=""
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 shrink-0 sm:h-9 sm:w-9"
+                  />
+                  <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">PackSketcher</h1>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Pack planning dashboard</p>
+              </div>
+              <LogoutButton />
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 sm:mt-4">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-700">
                 {accessStateLabel(accessState)}
               </span>
-              <Link href="/billing" className="underline-offset-2 hover:underline">
+              <Link
+                href="/billing"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
                 Billing
               </Link>
             </div>
+            <p className="mt-2 truncate text-xs text-slate-500">{user.email}</p>
+          </section>
+
+          <div className="grid gap-4 lg:grid-cols-12">
+            {/* Global Item Search */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5 lg:col-span-7">
+              <GlobalItemSearch />
+            </section>
+
+            {/* Background Templates Section */}
+            <TemplatesSection templates={LOCAL_TEMPLATES} className="lg:col-span-5" />
           </div>
-          <LogoutButton />
-        </div>
 
-        {/* Global Item Search */}
-        <div className="mb-10">
-          <GlobalItemSearch />
-        </div>
-
-        {/* Background Templates Section */}
-        <TemplatesSection templates={LOCAL_TEMPLATES} />
-
-        {/* Recent Backgrounds Section */}
-        <div className="mb-12">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-semibold text-slate-900">
-              Recent Backgrounds
-            </h2>
-            <UploadCustomBackgroundButton />
-          </div>
-          {backgrounds && backgrounds.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {backgrounds.map((bg: Background) => (
-                <BackgroundCard key={bg.id} bg={bg} />
-              ))}
+          {/* Recent Backgrounds Section */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900 sm:text-base">Recent Backgrounds</h2>
+                <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Continue where you left off.</p>
+              </div>
+              <UploadCustomBackgroundButton className="w-full justify-center text-xs sm:w-auto sm:text-sm" />
             </div>
-          ) : (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-              <p className="text-slate-500">
-                No saved backgrounds yet. Use a template above to get started.
-              </p>
-            </div>
-          )}
-        </div>
+            {backgrounds && backgrounds.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+                {backgrounds.map((bg: Background) => (
+                  <BackgroundCard key={bg.id} bg={bg} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
+                <p className="text-slate-500">
+                  No saved backgrounds yet. Use a template above to get started.
+                </p>
+              </div>
+            )}
+          </section>
 
-        {/* Activity Feed */}
-        <div className="mb-8">
+          {/* Activity Feed */}
           <ActivityFeed activities={activities} />
         </div>
       </div>

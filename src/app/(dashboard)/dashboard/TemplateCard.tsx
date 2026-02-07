@@ -11,7 +11,7 @@ interface TemplateCardProps {
 export function TemplateCard({ name, type, imageUrl }: TemplateCardProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-      <div className="relative h-48 bg-slate-100">
+      <div className="relative h-40 bg-slate-100 sm:h-48">
         <Image
           src={imageUrl}
           alt={name}
@@ -19,8 +19,8 @@ export function TemplateCard({ name, type, imageUrl }: TemplateCardProps) {
           className="object-cover"
         />
       </div>
-      <div className="p-4">
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">
+      <div className="p-3 sm:p-4">
+        <h3 className="mb-2 text-base font-semibold text-slate-900 sm:text-lg">
           {name}
         </h3>
         <CreateFromTemplateButton

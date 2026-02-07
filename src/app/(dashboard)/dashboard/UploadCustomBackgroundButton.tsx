@@ -17,7 +17,11 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function UploadCustomBackgroundButton() {
+interface UploadCustomBackgroundButtonProps {
+  className?: string
+}
+
+export function UploadCustomBackgroundButton({ className }: UploadCustomBackgroundButtonProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
@@ -140,7 +144,7 @@ export function UploadCustomBackgroundButton() {
     <>
       <button
         type="button"
-        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 hover:bg-slate-50 transition-colors"
+        className={`inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-50 ${className ?? ''}`}
         onClick={handleOpen}
       >
         Upload Custom Background
