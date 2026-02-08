@@ -36,9 +36,9 @@ const baseBag: Bag = {
   z_index: 1,
 }
 
-function setPointerModeCoarse() {
+function setPointerMode(isCoarse: boolean) {
   const matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: query === '(pointer: coarse)',
+    matches: query === '(pointer: coarse)' ? isCoarse : false,
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -128,7 +128,7 @@ function mockCanvas2dContext() {
 describe('Planner mobile resize handles', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    setPointerModeCoarse()
+    setPointerMode(true)
     mockSupabaseForResize()
   })
 
@@ -215,6 +215,109 @@ describe('Planner mobile resize handles', () => {
     await waitFor(() => {
       expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
       expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
+    })
+  })
+})
+
+describe('Planner desktop drag persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setPointerMode(false)
+    mockSupabaseForResize()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('keeps dragged box at the committed position after mouseup', async () => {
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    fireEvent.mouseDown(canvas as HTMLCanvasElement, { clientX: 150, clientY: 150 })
+    fireEvent.mouseMove(canvas as HTMLCanvasElement, { clientX: 350, clientY: 300 })
+    fireEvent.mouseUp(window)
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({ x: 300, y: 250 })
+      expect(updateEqMock).toHaveBeenCalledWith('id', 'bag-1')
+    })
+
+    updateMock.mockClear()
+    updateEqMock.mockClear()
+
+    fireEvent.mouseDown(canvas as HTMLCanvasElement, { clientX: 350, clientY: 300 })
+    fireEvent.mouseMove(canvas as HTMLCanvasElement, { clientX: 380, clientY: 330 })
+    fireEvent.mouseUp(window)
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({ x: 330, y: 280 })
+      expect(updateEqMock).toHaveBeenCalledWith('id', 'bag-1')
+    })
+  })
+
+  it('rolls back to the original position when drag save fails', async () => {
+    updateEqMock
+      .mockResolvedValueOnce({ error: { message: 'db write failed' } })
+      .mockResolvedValue({ error: null })
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    fireEvent.mouseDown(canvas as HTMLCanvasElement, { clientX: 150, clientY: 150 })
+    fireEvent.mouseMove(canvas as HTMLCanvasElement, { clientX: 350, clientY: 300 })
+    fireEvent.mouseUp(window)
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({ x: 300, y: 250 })
+    })
+
+    updateMock.mockClear()
+    updateEqMock.mockClear()
+
+    fireEvent.mouseDown(canvas as HTMLCanvasElement, { clientX: 150, clientY: 150 })
+    fireEvent.mouseMove(canvas as HTMLCanvasElement, { clientX: 180, clientY: 180 })
+    fireEvent.mouseUp(window)
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith({ x: 130, y: 130 })
+      expect(updateEqMock).toHaveBeenCalledWith('id', 'bag-1')
     })
   })
 })

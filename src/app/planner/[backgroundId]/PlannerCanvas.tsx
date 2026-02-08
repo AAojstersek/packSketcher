@@ -1174,9 +1174,14 @@ export function PlannerCanvas({
     setDragItemId(null)
     dragItemIdRef.current = null
     draggedItemCurrentRef.current = null
+    const x = Math.round(item.x)
+    const y = Math.round(item.y)
+    setLocalItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, x, y } : it))
+    )
     const { error: updateError } = await supabase
       .from('bags')
-      .update({ x: item.x, y: item.y })
+      .update({ x, y })
       .eq('id', id)
     if (updateError) {
       const start = dragStartPositionRef.current
