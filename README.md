@@ -55,3 +55,5 @@ Optional rollout flags:
 - `ACCESS_CONTROL_ENABLED=true`
 - `NEXT_PUBLIC_ACCESS_CONTROL_ENABLED=true`
 - `NEXT_PUBLIC_SIGNUP_DISABLED=true`
+
+User guide: `docs/user-guide.md`
