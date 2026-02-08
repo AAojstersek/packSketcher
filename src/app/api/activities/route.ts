@@ -24,7 +24,7 @@ export async function GET() {
 
     const results = shapeActivitiesResponse(data ?? [])
     return NextResponse.json(results)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

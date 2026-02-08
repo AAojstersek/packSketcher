@@ -2,6 +2,27 @@ interface FormatBoxLabelOptions {
   ellipsis?: string
 }
 
+export type BoxLabelOrientation = 'horizontal' | 'vertical'
+
+interface BoxLabelLayoutDecisionOptions {
+  ellipsis?: string
+  aggressiveTruncateThreshold?: number
+}
+
+interface DecideBoxLabelLayoutArgs {
+  rawName: string
+  horizontalMaxWidth: number
+  verticalMaxRun: number
+  measureText: (value: string) => number
+  isMobile: boolean
+  options?: BoxLabelLayoutDecisionOptions
+}
+
+export interface BoxLabelLayout {
+  text: string
+  orientation: BoxLabelOrientation
+}
+
 /**
  * Return a full or truncated label that fits maxWidth.
  * Returns null when even a meaningful truncated label cannot fit.
@@ -46,4 +67,57 @@ export function formatBoxLabel(
   }
 
   return `${name.slice(0, bestPrefixLength)}${ellipsis}`
+}
+
+/**
+ * Decide whether to draw the label horizontally or vertically.
+ * Vertical is considered only on mobile and only when horizontal would be hidden
+ * or aggressively truncated.
+ */
+export function decideBoxLabelLayout({
+  rawName,
+  horizontalMaxWidth,
+  verticalMaxRun,
+  measureText,
+  isMobile,
+  options = {},
+}: DecideBoxLabelLayoutArgs): BoxLabelLayout | null {
+  const name = rawName.trim()
+  if (!name) return null
+
+  const ellipsis = options.ellipsis ?? '...'
+  const horizontal = formatBoxLabel(name, horizontalMaxWidth, measureText, { ellipsis })
+  if (!horizontal) {
+    if (!isMobile) return null
+    const verticalWhenHorizontalHidden = formatBoxLabel(name, verticalMaxRun, measureText, { ellipsis })
+    return verticalWhenHorizontalHidden
+      ? { text: verticalWhenHorizontalHidden, orientation: 'vertical' }
+      : null
+  }
+
+  if (!isMobile) {
+    return { text: horizontal, orientation: 'horizontal' }
+  }
+
+  const threshold =
+    Number.isFinite(options.aggressiveTruncateThreshold) &&
+    options.aggressiveTruncateThreshold != null
+      ? Math.max(0, Math.floor(options.aggressiveTruncateThreshold))
+      : 8
+  const isTruncated = horizontal !== name
+  const visibleChars = horizontal.endsWith(ellipsis)
+    ? Math.max(0, horizontal.length - ellipsis.length)
+    : horizontal.length
+  const shouldPreferVertical = isTruncated && visibleChars <= threshold
+
+  if (!shouldPreferVertical) {
+    return { text: horizontal, orientation: 'horizontal' }
+  }
+
+  const vertical = formatBoxLabel(name, verticalMaxRun, measureText, { ellipsis })
+  if (!vertical) {
+    return { text: horizontal, orientation: 'horizontal' }
+  }
+
+  return { text: vertical, orientation: 'vertical' }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { BackgroundType } from '@/types'
 import { TemplateGrid } from './TemplateGrid'
 
@@ -17,21 +17,20 @@ interface TemplatesSectionProps {
 
 const STORAGE_KEY = 'packsketcher:dashboard:templates-collapsed'
 
-export function TemplatesSection({ templates, className }: TemplatesSectionProps) {
-  const [collapsed, setCollapsed] = useState(false)
+function readInitialCollapsedState(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY)
+    if (saved === 'true') return true
+    if (saved === 'false') return false
+  } catch {
+    // Ignore storage read failures and keep default expanded state.
+  }
+  return false
+}
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY)
-      if (saved === 'true') {
-        setCollapsed(true)
-      } else if (saved === 'false') {
-        setCollapsed(false)
-      }
-    } catch {
-      // Ignore storage read failures and keep default expanded state.
-    }
-  }, [])
+export function TemplatesSection({ templates, className }: TemplatesSectionProps) {
+  const [collapsed, setCollapsed] = useState(readInitialCollapsedState)
 
   const handleToggle = () => {
     setCollapsed((previous) => {

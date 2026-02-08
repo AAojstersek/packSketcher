@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createSupabaseServerClient: createSupabaseServerClientMock,
 }))
 
-type SupabaseQueryResult<T> = Promise<{ data: T | null; error: any }>
+type SupabaseQueryResult<T> = Promise<{ data: T | null; error: unknown }>
 
 function createSupabaseMock(options: {
   existingResult: SupabaseQueryResult<{ id: string }>

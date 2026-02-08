@@ -3,11 +3,26 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { PlannerShell } from '@/app/planner/[backgroundId]/PlannerShell'
 
-let latestHeaderProps: any
-let latestCanvasProps: any
+interface HeaderMockProps {
+  isEditMode: boolean
+  onToggleEditMode: () => void
+  onAddBag: () => void
+}
+
+interface CanvasMockProps {
+  isEditMode: boolean
+  selectedBagId: string | null
+  highlightBagId: string | null
+  addBagRequestId: number
+  onSelectBagId: (bagId: string | null) => void
+  onHighlightBagIdChange: (bagId: string | null) => void
+}
+
+let latestHeaderProps: HeaderMockProps | undefined
+let latestCanvasProps: CanvasMockProps | undefined
 
 vi.mock('@/app/planner/[backgroundId]/PlannerHeader', () => ({
-  PlannerHeader: (props: any) => {
+  PlannerHeader: (props: HeaderMockProps) => {
     latestHeaderProps = props
     return (
       <div>
@@ -23,7 +38,7 @@ vi.mock('@/app/planner/[backgroundId]/PlannerHeader', () => ({
 }))
 
 vi.mock('@/app/planner/[backgroundId]/PlannerCanvas', () => ({
-  PlannerCanvas: (props: any) => {
+  PlannerCanvas: (props: CanvasMockProps) => {
     latestCanvasProps = props
     return (
       <div>
@@ -49,7 +64,6 @@ describe('PlannerShell', () => {
 
     render(
       <PlannerShell
-        backgroundId="bg-1"
         backgroundName="Garage"
         imageUrl="/garage.png"
         packId="pack-1"
@@ -58,32 +72,32 @@ describe('PlannerShell', () => {
       />
     )
 
-    expect(latestHeaderProps.isEditMode).toBe(false)
-    expect(latestCanvasProps.isEditMode).toBe(false)
-    expect(latestCanvasProps.selectedBagId).toBe('bag-1')
-    expect(latestCanvasProps.highlightBagId).toBe('bag-1')
-    expect(latestCanvasProps.addBagRequestId).toBe(0)
+    expect(latestHeaderProps?.isEditMode).toBe(false)
+    expect(latestCanvasProps?.isEditMode).toBe(false)
+    expect(latestCanvasProps?.selectedBagId).toBe('bag-1')
+    expect(latestCanvasProps?.highlightBagId).toBe('bag-1')
+    expect(latestCanvasProps?.addBagRequestId).toBe(0)
 
     await user.click(screen.getByRole('button', { name: 'toggle-edit' }))
     await waitFor(() => {
-      expect(latestHeaderProps.isEditMode).toBe(true)
-      expect(latestCanvasProps.isEditMode).toBe(true)
+      expect(latestHeaderProps?.isEditMode).toBe(true)
+      expect(latestCanvasProps?.isEditMode).toBe(true)
     })
 
     await user.click(screen.getByRole('button', { name: 'select-bag-2' }))
     await waitFor(() => {
-      expect(latestCanvasProps.selectedBagId).toBe('bag-2')
-      expect(latestCanvasProps.highlightBagId).toBeNull()
+      expect(latestCanvasProps?.selectedBagId).toBe('bag-2')
+      expect(latestCanvasProps?.highlightBagId).toBeNull()
     })
 
     await user.click(screen.getByRole('button', { name: 'highlight-bag-3' }))
     await waitFor(() => {
-      expect(latestCanvasProps.highlightBagId).toBe('bag-3')
+      expect(latestCanvasProps?.highlightBagId).toBe('bag-3')
     })
 
     await user.click(screen.getByRole('button', { name: 'add-bag' }))
     await waitFor(() => {
-      expect(latestCanvasProps.addBagRequestId).toBe(1)
+      expect(latestCanvasProps?.addBagRequestId).toBe(1)
     })
   })
 })

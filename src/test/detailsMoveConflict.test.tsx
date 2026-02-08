@@ -166,7 +166,6 @@ describe('DetailsPanel move conflict handling', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
         requestMoveItemsAction={(action) => {
           void action()
         }}

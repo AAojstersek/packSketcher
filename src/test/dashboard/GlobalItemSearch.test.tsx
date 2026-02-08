@@ -13,6 +13,10 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+function assignFetchMock(fetchMock: ReturnType<typeof vi.fn>) {
+  global.fetch = fetchMock as unknown as typeof fetch
+}
+
 describe('GlobalItemSearch', () => {
   afterEach(() => {
     pushMock.mockReset()
@@ -26,7 +30,7 @@ describe('GlobalItemSearch', () => {
       ok: true,
       json: vi.fn().mockResolvedValue([]),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<GlobalItemSearch />)
 
@@ -58,7 +62,7 @@ describe('GlobalItemSearch', () => {
         },
       ]),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<GlobalItemSearch />)
 
@@ -85,7 +89,7 @@ describe('GlobalItemSearch', () => {
       ok: true,
       json: vi.fn().mockResolvedValue([]),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<GlobalItemSearch />)
 
@@ -117,7 +121,7 @@ describe('GlobalItemSearch', () => {
         },
       ]),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<GlobalItemSearch />)
 

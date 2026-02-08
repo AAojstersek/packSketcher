@@ -166,10 +166,6 @@ export interface DetailsPanelProps {
   isEditMode: boolean
   onClose: () => void
   onToggleEditMode: () => void
-  onUpdateBag: (
-    bagId: string,
-    patch: Partial<Pick<Bag, 'name' | 'color' | 'locked'> & { bag_weight_kg?: number }>
-  ) => void
   onSaveSuccess?: (bagRow: Bag) => void
   saveError?: string | null
   clearSaveError?: () => void
@@ -185,14 +181,13 @@ export interface DetailsPanelHandle {
 
 /**
  * Bag details side panel. In Edit mode: edits are held in local draft state;
- * click Save to persist via onUpdateBag, or Cancel to revert to the current bag.
+ * click Save to persist via RPC, or Cancel to revert to the current bag.
  */
 export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(function DetailsPanel({
   bag,
   isEditMode,
   onClose,
   onToggleEditMode,
-  onUpdateBag,
   onSaveSuccess,
   saveError = null,
   clearSaveError,
@@ -269,6 +264,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
   const currentMoveConflict = moveConflictState
     ? getCurrentBulkMoveConflict(moveConflictState.flow)
     : null
+  const bagId = bag?.id ?? null
 
   const reloadFromDb = useCallback(async (bagId: string) => {
     const [bagRes, itemsRes] = await Promise.all([
@@ -345,11 +341,11 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
       clearTimeout(undoToastTimeoutRef.current)
       undoToastTimeoutRef.current = null
     }
-  }, [bag?.id])
+  }, [bag])
 
   // Load items and current user when bag is set
   useEffect(() => {
-    if (!bag) return
+    if (!bagId) return
     let cancelled = false
     setItemsLoadError(null)
     ;(async () => {
@@ -359,7 +355,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
           supabase
             .from('items')
             .select('*')
-            .eq('bag_id', bag.id)
+            .eq('bag_id', bagId)
             .order('created_at', { ascending: true }),
         ])
         if (cancelled) return
@@ -393,11 +389,11 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     return () => {
       cancelled = true
     }
-  }, [bag?.id])
+  }, [bagId])
 
   // Load target boxes for bulk move (exclude current box).
   useEffect(() => {
-    if (!bag) return
+    if (!bagId) return
     let cancelled = false
     setMoveTargetsLoadError(null)
     setIsLoadingMoveTargets(true)
@@ -414,7 +410,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
 
         const allBags = (bagsRes.data ?? []) as RawBagTargetRow[]
         const targetBags = allBags.filter(
-          (row) => row.id != null && row.id !== bag.id
+          (row) => row.id != null && row.id !== bagId
         )
         const packIds = Array.from(
           new Set(
@@ -500,7 +496,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     return () => {
       cancelled = true
     }
-  }, [bag?.id])
+  }, [bagId])
 
   useEffect(() => {
     setSelectedMoveItemIds((previous) =>
@@ -573,13 +569,6 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
   const handleColorChange = (color: string) => {
     if (!bag || !draft) return
     setDraft((prev) => (prev ? { ...prev, color } : null))
-    setValidationError(null)
-    clearSaveError?.()
-  }
-
-  const handleLockedChange = () => {
-    if (!bag || !draft) return
-    setDraft((prev) => (prev ? { ...prev, locked: !prev.locked } : null))
     setValidationError(null)
     clearSaveError?.()
   }
@@ -927,7 +916,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     }
   }, [bag, dismissUndoToast, isMovingItems, isUndoingMove, undoToast])
 
-  const handleSave = async (): Promise<boolean> => {
+  const handleSave = useCallback(async (): Promise<boolean> => {
     if (!bag || !draft) return false
     if (isSaving) return false
     if (!isDirty) return true
@@ -1023,9 +1012,20 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
         setIsSaving(false)
       }, 500)
     }
-  }
+  }, [
+    applyLoadedItems,
+    bag,
+    clearSaveError,
+    draft,
+    draftItems,
+    isDirty,
+    isSaving,
+    onSaveSuccess,
+    reloadFromDb,
+    weightDisplay,
+  ])
 
-  const handleCancel = async (): Promise<boolean> => {
+  const handleCancel = useCallback(async (): Promise<boolean> => {
     if (!bag) return false
     if (isSaving) return false
     if (!isDirty) return true
@@ -1056,7 +1056,7 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
     } finally {
       setIsSaving(false)
     }
-  }
+  }, [applyLoadedItems, bag, clearSaveError, isDirty, isSaving, reloadFromDb])
 
   useImperativeHandle(
     ref,

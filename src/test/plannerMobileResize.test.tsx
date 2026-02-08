@@ -91,6 +91,38 @@ function loadPlannerImage() {
   Object.defineProperty(image, 'clientWidth', { configurable: true, value: 1000 })
   Object.defineProperty(image, 'clientHeight', { configurable: true, value: 600 })
   fireEvent.load(image)
+  window.dispatchEvent(new Event('resize'))
+}
+
+function mockCanvas2dContext() {
+  const rotate = vi.fn()
+  const fillRect = vi.fn()
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback): number => {
+    callback(performance.now())
+    return 1
+  })
+  const context = {
+    clearRect: vi.fn(),
+    strokeRect: vi.fn(),
+    fillRect,
+    measureText: vi.fn((value: string) => ({ width: value.length * 8 })),
+    fillText: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    translate: vi.fn(),
+    rotate,
+    lineWidth: 1,
+    fillStyle: '#000000',
+    strokeStyle: '#000000',
+    font: '',
+    textBaseline: 'top',
+  } as unknown as CanvasRenderingContext2D
+
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+    () => context as CanvasRenderingContext2D
+  )
+
+  return { rotate, fillRect }
 }
 
 describe('Planner mobile resize handles', () => {
@@ -146,6 +178,43 @@ describe('Planner mobile resize handles', () => {
     await waitFor(() => {
       expect(updateMock).toHaveBeenCalledWith({ x: 70, y: 70, width: 250, height: 150 })
       expect(updateEqMock).toHaveBeenCalledWith('id', 'bag-1')
+    })
+  })
+
+  it('renders long mobile labels and can rotate them vertically without crashing', async () => {
+    mockCanvas2dContext()
+    const longNameBag: Bag = {
+      ...baseBag,
+      id: 'bag-long',
+      name: 'Very Long Emergency Supplies Name',
+      width: 90,
+      height: 300,
+    }
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[longNameBag]}
+        isEditMode={false}
+        selectedBagId={null}
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    await waitFor(() => {
+      expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
+      expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
     })
   })
 })

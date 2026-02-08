@@ -9,6 +9,12 @@ import {
 
 const DEBOUNCE_MS = 250
 
+function getErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const value = (payload as { error?: unknown }).error
+  return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
 export function GlobalItemSearch() {
   const router = useRouter()
   const [query, setQuery] = useState('')
@@ -43,8 +49,8 @@ export function GlobalItemSearch() {
           signal: controller.signal,
         })
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          const message = (data as any)?.error ?? 'Search failed. Please try again.'
+          const data: unknown = await res.json().catch(() => null)
+          const message = getErrorMessage(data) ?? 'Search failed. Please try again.'
           setError(message)
           setResults([])
           return
@@ -52,7 +58,7 @@ export function GlobalItemSearch() {
         const data = (await res.json()) as ItemsSearchResult[]
         setResults(data ?? [])
       } catch (err) {
-        if ((err as any)?.name === 'AbortError') return
+        if (err instanceof DOMException && err.name === 'AbortError') return
         setError('Search failed. Please try again.')
         setResults([])
       } finally {

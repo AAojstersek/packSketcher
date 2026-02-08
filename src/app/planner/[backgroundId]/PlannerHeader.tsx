@@ -21,7 +21,6 @@ function ChevronLeftIcon() {
 }
 
 interface PlannerHeaderProps {
-  backgroundId: string
   backgroundName: string
   isEditMode: boolean
   onToggleEditMode: () => void
@@ -29,7 +28,6 @@ interface PlannerHeaderProps {
 }
 
 export function PlannerHeader({
-  backgroundId,
   backgroundName,
   isEditMode,
   onToggleEditMode,

@@ -6,7 +6,6 @@ import { PlannerHeader } from './PlannerHeader'
 import { PlannerCanvas } from './PlannerCanvas'
 
 interface PlannerShellProps {
-  backgroundId: string
   backgroundName: string
   imageUrl: string
   packId: string
@@ -15,7 +14,6 @@ interface PlannerShellProps {
 }
 
 export function PlannerShell({
-  backgroundId,
   backgroundName,
   imageUrl,
   packId,
@@ -55,7 +53,6 @@ export function PlannerShell({
   return (
     <>
       <PlannerHeader
-        backgroundId={backgroundId}
         backgroundName={backgroundName}
         isEditMode={isEditMode}
         onToggleEditMode={handleToggleEditMode}

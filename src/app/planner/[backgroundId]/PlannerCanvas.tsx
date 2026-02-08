@@ -1,12 +1,13 @@
 'use client'
 
+import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Bag } from '@/types'
 import { supabase } from '@/lib/supabase/browser'
 import { friendlySupabaseMessage } from '@/lib/supabase/errorMapping'
 import { DetailsPanel, type DetailsPanelHandle } from '@/components/planner/DetailsPanel'
 import { nextBoxName } from '@/lib/boxes/naming'
-import { formatBoxLabel } from '@/lib/boxes/labels'
+import { decideBoxLabelLayout } from '@/lib/boxes/labels'
 import { swapBagZIndex, type SwapDirection } from '@/lib/rpc/bags'
 import { reorderBagsOneStep } from '@/lib/boxes/reorder'
 import { shouldPromptUnsavedGuard, type UnsavedGuardAction } from '@/lib/planner/unsavedGuard'
@@ -50,6 +51,7 @@ const LONG_PRESS_MS = 550
 const LONG_PRESS_MOVE_TOLERANCE = 10
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_MAX_DISTANCE_PX = 24
+const PLANNER_PERF_DEBUG = process.env.NEXT_PUBLIC_PLANNER_PERF_DEBUG === 'true'
 type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br'
 type TouchPoint = { clientX: number; clientY: number }
 
@@ -158,13 +160,6 @@ export function PlannerCanvas({
   const [unsavedGuardBusyAction, setUnsavedGuardBusyAction] = useState<'save' | 'discard' | null>(null)
   const pendingGuardActionRef = useRef<(() => Promise<void> | void) | null>(null)
   const pendingNavigationHrefRef = useRef<string | null>(null)
-  const requestGuardedActionRef = useRef<
-    (
-      action: () => Promise<void> | void,
-      actionType: UnsavedGuardAction,
-      options?: { navigationHref?: string }
-    ) => void
-  >(() => {})
   const handledAddBagRequestRef = useRef(0)
   const [contextMenu, setContextMenu] = useState<{
     bagId: string
@@ -197,6 +192,19 @@ export function PlannerCanvas({
     anchorWorldX: number
     anchorWorldY: number
   } | null>(null)
+  const drawRafRef = useRef<number | null>(null)
+  const pendingDrawItemsRef = useRef<Bag[] | null>(null)
+  const perfMetricsRef = useRef<{
+    drawDurations: number[]
+    interactionFrames: number[]
+    lastInteractionTs: number
+    drawCount: number
+  }>({
+    drawDurations: [],
+    interactionFrames: [],
+    lastInteractionTs: 0,
+    drawCount: 0,
+  })
 
   const detailsItem =
     detailsItemId != null ? localItems.find((i) => i.id === detailsItemId) ?? null : null
@@ -210,17 +218,77 @@ export function PlannerCanvas({
   const HANDLE_SIZE_COARSE = 12
   const HANDLE_TOUCH_HIT_SLOP = 8
   const MIN_ITEM_SIZE = 40
+  const MOBILE_LABEL_TRUNCATE_THRESHOLD = 8
+  const MOBILE_VERTICAL_LABEL_MIN_LANE_WIDTH = 24
 
-  dragItemIdRef.current = dragItemId
-  selectedItemIdRef.current = selectedItemId
-  highlightBagIdRef.current = highlightBagId
-  localItemsRef.current = localItems
-  resizeHandleRef.current = resizeHandle
-  scaleRef.current = scale
-  offsetXRef.current = offsetX
-  offsetYRef.current = offsetY
-  isEditModeRef.current = isEditMode
-  isDetailsOpenRef.current = isDetailsOpen
+  useEffect(() => {
+    dragItemIdRef.current = dragItemId
+    selectedItemIdRef.current = selectedItemId
+    highlightBagIdRef.current = highlightBagId
+    localItemsRef.current = localItems
+    resizeHandleRef.current = resizeHandle
+    scaleRef.current = scale
+    offsetXRef.current = offsetX
+    offsetYRef.current = offsetY
+    isEditModeRef.current = isEditMode
+    isDetailsOpenRef.current = isDetailsOpen
+  }, [
+    dragItemId,
+    highlightBagId,
+    isDetailsOpen,
+    isEditMode,
+    localItems,
+    offsetX,
+    offsetY,
+    resizeHandle,
+    scale,
+    selectedItemId,
+  ])
+
+  function appendPerfSample(samples: number[], value: number, maxSamples = 240) {
+    samples.push(value)
+    if (samples.length > maxSamples) samples.shift()
+  }
+
+  function percentile(values: number[], p: number): number {
+    if (values.length === 0) return 0
+    const sorted = [...values].sort((a, b) => a - b)
+    const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
+    return sorted[index]
+  }
+
+  const recordInteractionFrame = useCallback(() => {
+    if (!PLANNER_PERF_DEBUG) return
+    const now = performance.now()
+    const metrics = perfMetricsRef.current
+    if (metrics.lastInteractionTs > 0) {
+      appendPerfSample(metrics.interactionFrames, now - metrics.lastInteractionTs)
+    }
+    metrics.lastInteractionTs = now
+  }, [])
+
+  const logPerfSnapshotIfNeeded = useCallback(() => {
+    if (!PLANNER_PERF_DEBUG) return
+    const metrics = perfMetricsRef.current
+    metrics.drawCount += 1
+    if (metrics.drawCount % 120 !== 0) return
+    const drawP95 = percentile(metrics.drawDurations, 0.95)
+    const frameP95 = percentile(metrics.interactionFrames, 0.95)
+    console.debug('[planner-perf]', {
+      drawP95Ms: Number(drawP95.toFixed(2)),
+      frameP95Ms: Number(frameP95.toFixed(2)),
+      drawSamples: metrics.drawDurations.length,
+      frameSamples: metrics.interactionFrames.length,
+    })
+  }, [])
+
+  function setHoveredItemIdIfChanged(nextId: string | null) {
+    setHoveredItemId((previous) => (previous === nextId ? previous : nextId))
+  }
+
+  function setHoveredHandleIfChanged(nextHandle: ResizeHandle | null) {
+    setHoveredHandle((previous) => (previous === nextHandle ? previous : nextHandle))
+  }
 
   function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
     const el = containerRef.current
@@ -326,13 +394,15 @@ export function PlannerCanvas({
     return null
   }
 
-  const drawOverlay = (itemsToDraw: Bag[] = localItems) => {
+  const drawOverlay = useCallback((itemsToDraw?: Bag[]) => {
     const canvas = canvasRef.current
     const img = imageRef.current
     if (!canvas || !img || !imageLoaded) return
+    const renderItems = itemsToDraw ?? localItemsRef.current
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    const drawStartedAt = PLANNER_PERF_DEBUG ? performance.now() : 0
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -346,7 +416,7 @@ export function PlannerCanvas({
       const scaleY = canvas.height / imageNaturalHeight
 
       // Draw items using scaled coordinates and bag.color, lowest z-index first.
-      getRenderOrderedItems(itemsToDraw).forEach((item) => {
+      getRenderOrderedItems(renderItems).forEach((item) => {
         const itemX = item.x * scaleX
         const itemY = item.y * scaleY
         const itemWidth = item.width * scaleX
@@ -381,31 +451,54 @@ export function PlannerCanvas({
         ctx.lineWidth = isSelected ? 3 : isHovered ? 2.25 : 1.5
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
 
-        // Box label in top-left; truncate or hide when space is too small.
+        // Box label in top-left; on mobile, rotate vertically when horizontal label is too truncated.
         const labelPaddingX = 6
         const labelPaddingY = 4
         const labelFontSize = 12
         const labelHeight = labelFontSize + 4
         const maxLabelWidth = itemWidth - labelPaddingX * 2
         const maxLabelHeight = itemHeight - labelPaddingY * 2
-        if (maxLabelWidth > 0 && maxLabelHeight >= labelHeight) {
+        const verticalMaxLabelRun =
+          itemWidth >= MOBILE_VERTICAL_LABEL_MIN_LANE_WIDTH ? itemHeight - labelPaddingY * 2 - 4 : 0
+        if (maxLabelWidth > 0 && maxLabelHeight > 0) {
           ctx.font = `600 ${labelFontSize}px ui-sans-serif, system-ui, sans-serif`
           ctx.textBaseline = 'top'
-          const label = formatBoxLabel(
-            item.name,
-            maxLabelWidth,
-            (value) => ctx.measureText(value).width
-          )
-          if (label) {
-            const textWidth = ctx.measureText(label).width
+          const labelLayout = decideBoxLabelLayout({
+            rawName: item.name,
+            horizontalMaxWidth: maxLabelWidth,
+            verticalMaxRun: verticalMaxLabelRun,
+            measureText: (value) => ctx.measureText(value).width,
+            isMobile: isCoarsePointer,
+            options: {
+              aggressiveTruncateThreshold: MOBILE_LABEL_TRUNCATE_THRESHOLD,
+            },
+          })
+          if (labelLayout) {
+            const textWidth = ctx.measureText(labelLayout.text).width
             const bgX = itemX + labelPaddingX - 2
             const bgY = itemY + labelPaddingY - 1
-            const bgWidth = textWidth + 4
-            const bgHeight = labelHeight
             ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
-            ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
-            ctx.fillText(label, itemX + labelPaddingX, itemY + labelPaddingY)
+            if (labelLayout.orientation === 'horizontal') {
+              if (maxLabelHeight >= labelHeight) {
+                const bgWidth = textWidth + 4
+                const bgHeight = labelHeight
+                ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+                ctx.fillText(labelLayout.text, itemX + labelPaddingX, itemY + labelPaddingY)
+              }
+            } else {
+              const bgWidth = labelHeight
+              const bgHeight = textWidth + 4
+              if (bgWidth <= itemWidth && bgHeight <= itemHeight) {
+                ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'
+                ctx.save()
+                ctx.translate(itemX + labelPaddingX, itemY + labelPaddingY)
+                ctx.rotate(Math.PI / 2)
+                ctx.fillText(labelLayout.text, 0, -labelHeight + 2)
+                ctx.restore()
+              }
+            }
           }
         }
 
@@ -434,28 +527,56 @@ export function PlannerCanvas({
         }
       })
     }
-  }
 
-  const updateCanvasSize = () => {
+    if (PLANNER_PERF_DEBUG) {
+      const drawDuration = performance.now() - drawStartedAt
+      appendPerfSample(perfMetricsRef.current.drawDurations, drawDuration)
+      logPerfSnapshotIfNeeded()
+    }
+  }, [
+    highlightBagId,
+    hoveredItemId,
+    imageLoaded,
+    isCoarsePointer,
+    logPerfSnapshotIfNeeded,
+    selectedItemId,
+  ])
+
+  const flushScheduledDraw = useCallback(() => {
+    drawRafRef.current = null
+    const pendingItems = pendingDrawItemsRef.current
+    pendingDrawItemsRef.current = null
+    drawOverlay(pendingItems ?? undefined)
+  }, [drawOverlay])
+
+  const scheduleOverlayDraw = useCallback((itemsToDraw?: Bag[]) => {
+    pendingDrawItemsRef.current = itemsToDraw ?? null
+    if (drawRafRef.current != null) return
+    drawRafRef.current = window.requestAnimationFrame(flushScheduledDraw)
+  }, [flushScheduledDraw])
+
+  const updateCanvasSize = useCallback(() => {
     const img = imageRef.current
     const canvas = canvasRef.current
     if (!img || !canvas) return
 
     // Match canvas size to rendered image size
-    const displayWidth = img.clientWidth
-    const displayHeight = img.clientHeight
+    const displayWidth = Math.max(1, Math.round(img.clientWidth))
+    const displayHeight = Math.max(1, Math.round(img.clientHeight))
 
-    // Set canvas internal resolution (this clears the canvas)
-    canvas.width = displayWidth
-    canvas.height = displayHeight
+    // Avoid expensive canvas resets when dimensions did not change.
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+      canvas.width = displayWidth
+      canvas.height = displayHeight
 
-    // Set canvas CSS to match exactly (no scaling)
-    canvas.style.width = `${displayWidth}px`
-    canvas.style.height = `${displayHeight}px`
+      // Set canvas CSS to match exactly (no scaling)
+      canvas.style.width = `${displayWidth}px`
+      canvas.style.height = `${displayHeight}px`
+    }
 
     // Redraw overlay
-    drawOverlay()
-  }
+    scheduleOverlayDraw()
+  }, [scheduleOverlayDraw])
 
   useEffect(() => {
     const img = imageRef.current
@@ -475,21 +596,51 @@ export function PlannerCanvas({
       img.addEventListener('load', handleImageLoad)
       return () => img.removeEventListener('load', handleImageLoad)
     }
-  }, [imageUrl])
+  }, [imageUrl, updateCanvasSize])
 
   useEffect(() => {
     if (!imageLoaded) return
+    const img = imageRef.current
+    if (!img) return
 
-    updateCanvasSize()
+    const handleResize = () => updateCanvasSize()
+    window.addEventListener('resize', handleResize)
 
-    // Handle window resize
-    const handleResize = () => {
-      updateCanvasSize()
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => updateCanvasSize())
+      observer.observe(img)
     }
 
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [imageLoaded, localItems, hoveredItemId, selectedItemId, highlightBagId, isDragging, isResizing, scale, offsetX, offsetY])
+    updateCanvasSize()
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      observer?.disconnect()
+    }
+  }, [imageLoaded, imageUrl, updateCanvasSize])
+
+  useEffect(() => {
+    if (!imageLoaded) return
+    scheduleOverlayDraw()
+  }, [
+    highlightBagId,
+    hoveredHandle,
+    hoveredItemId,
+    imageLoaded,
+    isCoarsePointer,
+    localItems,
+    scheduleOverlayDraw,
+    selectedItemId,
+  ])
+
+  useEffect(() => {
+    return () => {
+      if (drawRafRef.current != null) {
+        cancelAnimationFrame(drawRafRef.current)
+        drawRafRef.current = null
+      }
+    }
+  }, [])
 
   // Fetch and cache user ID on mount
   useEffect(() => {
@@ -507,11 +658,14 @@ export function PlannerCanvas({
   useEffect(() => {
     if (lastSyncedPackId === packId) return
     lastSyncedPackId = packId
-    setLocalItems(bags)
+    const frameId = window.requestAnimationFrame(() => {
+      setLocalItems(bags)
+    })
+    return () => window.cancelAnimationFrame(frameId)
   }, [packId, bags])
 
   /** Returns true if keyboard events should go to the element (no canvas shortcuts). */
-  function isTypingTarget(target: EventTarget | null): boolean {
+  const isTypingTarget = useCallback((target: EventTarget | null): boolean => {
     const el = target as HTMLElement | null
     if (!el || typeof el.closest !== 'function') return false
     const tag = el.tagName?.toLowerCase()
@@ -522,11 +676,11 @@ export function PlannerCanvas({
       !!el.isContentEditable
     if (isControl) return true
     return !!el.closest('input, textarea, select, [contenteditable="true"]')
-  }
+  }, [])
 
-  function skipWhenTyping(e: KeyboardEvent): boolean {
+  const skipWhenTyping = useCallback((e: KeyboardEvent): boolean => {
     return isTypingTarget(e.target) || isTypingTarget(document.activeElement)
-  }
+  }, [isTypingTarget])
 
   function showTemporaryError(message: string) {
     setError(message)
@@ -601,7 +755,6 @@ export function PlannerCanvas({
     },
     [hasUnsavedDetailsChanges]
   )
-  requestGuardedActionRef.current = requestGuardedAction
 
   const handleUnsavedGuardCancel = useCallback(() => {
     clearPendingGuardAction()
@@ -707,18 +860,6 @@ export function PlannerCanvas({
     return () => document.removeEventListener('click', handleDocumentClick, true)
   }, [hasUnsavedDetailsChanges, requestGuardedAction])
 
-  /** True when focus is in an input/textarea/contentEditable — do not capture Space. */
-  function isTypingActive(): boolean {
-    const el = document.activeElement
-    return !!(
-      el &&
-      (el instanceof HTMLInputElement ||
-        el instanceof HTMLTextAreaElement ||
-        (el as HTMLElement).isContentEditable ||
-        el.getAttribute?.('role') === 'textbox')
-    )
-  }
-
   // Delete selected item on Delete/Backspace
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
@@ -738,7 +879,7 @@ export function PlannerCanvas({
       const previousDetailsItemId = detailsItemId
       const wasDetailsOpenForItem =
         isDetailsOpenRef.current && previousDetailsItemId != null && previousDetailsItemId === id
-      requestGuardedActionRef.current(async () => {
+      requestGuardedAction(async () => {
         setLocalItems((prev) => prev.filter((i) => i.id !== id))
         setSelectedItemId(null)
         onHighlightBagIdChange(null)
@@ -764,7 +905,7 @@ export function PlannerCanvas({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [detailsItemId, onHighlightBagIdChange, onOpenDetails, setSelectedItemId])
+  }, [detailsItemId, onHighlightBagIdChange, onOpenDetails, requestGuardedAction, setSelectedItemId, skipWhenTyping])
 
   // Only attach Space-to-pan when details panel is closed. When panel is open, no listener → Space always works in inputs.
   useEffect(() => {
@@ -849,8 +990,7 @@ export function PlannerCanvas({
     return () => clearLongPressTimer()
   }, [])
 
-  const handleWheelRef = useRef((_e: WheelEvent) => {})
-  handleWheelRef.current = (e: WheelEvent) => {
+  const handleWheel = useCallback((e: WheelEvent) => {
     const el = containerRef.current
     if (!el) return
     e.preventDefault()
@@ -872,17 +1012,17 @@ export function PlannerCanvas({
       setOffsetX(offsetXRef.current - e.deltaX)
       setOffsetY(offsetYRef.current - e.deltaY)
     }
-  }
+    recordInteractionFrame()
+  }, [recordInteractionFrame])
 
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    const onWheel = (e: WheelEvent) => handleWheelRef.current(e)
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [handleWheel])
 
-  const getResizedBagFromPointer = (
+  const getResizedBagFromPointer = useCallback((
     start: ResizeStart,
     handle: ResizeHandle,
     pointerX: number,
@@ -942,9 +1082,9 @@ export function PlannerCanvas({
       width: Math.round(newW),
       height: Math.round(newH),
     }
-  }
+  }, [MIN_ITEM_SIZE])
 
-  const applyResizeAtCanvasPoint = (canvasX: number, canvasY: number) => {
+  const applyResizeAtCanvasPoint = useCallback((canvasX: number, canvasY: number) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const imageNaturalWidth = imageNaturalWidthRef.current
@@ -971,9 +1111,10 @@ export function PlannerCanvas({
     )
     const updated = { ...item, ...resized }
     resizedItemCurrentRef.current = updated
-    setLocalItems((prev) => prev.map((entry) => (entry.id === id ? updated : entry)))
-    drawOverlay(localItemsRef.current.map((entry) => (entry.id === id ? updated : entry)))
-  }
+    const draftItems = localItemsRef.current.map((entry) => (entry.id === id ? updated : entry))
+    recordInteractionFrame()
+    scheduleOverlayDraw(draftItems)
+  }, [getResizedBagFromPointer, recordInteractionFrame, scheduleOverlayDraw])
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -1020,8 +1161,7 @@ export function PlannerCanvas({
     draggedItemCurrentRef.current = { ...item }
   }
 
-  const handleDragEnd = useRef<() => void>(() => {})
-  handleDragEnd.current = async () => {
+  const finishDrag = useCallback(async () => {
     const id = dragItemIdRef.current
     if (!id) return
     const item = draggedItemCurrentRef.current
@@ -1048,10 +1188,9 @@ export function PlannerCanvas({
       setError(friendlySupabaseMessage(updateError, 'Failed to move bag.'))
       setTimeout(() => setError(null), 5000)
     }
-  }
+  }, [])
 
-  const handleResizeEnd = useRef<() => void>(() => {})
-  handleResizeEnd.current = async () => {
+  const finishResize = useCallback(async () => {
     const id = resizeItemIdRef.current
     if (!id) return
     const start = resizeStartRef.current
@@ -1092,14 +1231,16 @@ export function PlannerCanvas({
       setError(friendlySupabaseMessage(updateError, 'Resize save failed.'))
       setTimeout(() => setError(null), 5000)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!isDragging) return
-    const onMouseUp = () => handleDragEnd.current()
+    const onMouseUp = () => {
+      void finishDrag()
+    }
     window.addEventListener('mouseup', onMouseUp)
     return () => window.removeEventListener('mouseup', onMouseUp)
-  }, [isDragging])
+  }, [finishDrag, isDragging])
 
   useEffect(() => {
     if (!isResizing) return
@@ -1107,14 +1248,16 @@ export function PlannerCanvas({
       const world = clientToWorldFromRefs(e.clientX, e.clientY)
       applyResizeAtCanvasPoint(world.x, world.y)
     }
-    const onResizeEnd = () => handleResizeEnd.current()
+    const onResizeEnd = () => {
+      void finishResize()
+    }
     window.addEventListener('mousemove', onResizeMove)
     window.addEventListener('mouseup', onResizeEnd)
     return () => {
       window.removeEventListener('mousemove', onResizeMove)
       window.removeEventListener('mouseup', onResizeEnd)
     }
-  }, [isResizing])
+  }, [applyResizeAtCanvasPoint, finishResize, isResizing])
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -1122,6 +1265,7 @@ export function PlannerCanvas({
     if (isPanning) {
       setOffsetX(panStartOffsetRef.current.x + (e.clientX - panStartRef.current.x))
       setOffsetY(panStartOffsetRef.current.y + (e.clientY - panStartRef.current.y))
+      recordInteractionFrame()
       return
     }
     const { x: worldX, y: worldY } = clientToWorld(e.clientX, e.clientY)
@@ -1129,7 +1273,8 @@ export function PlannerCanvas({
     const imageNaturalHeight = imageNaturalHeightRef.current
 
     if (isDragging && dragItemId) {
-      const item = localItems.find((i) => i.id === dragItemId)
+      const item =
+        draggedItemCurrentRef.current ?? localItemsRef.current.find((entry) => entry.id === dragItemId)
       if (!item) return
       if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
       const orig = canvasToOriginal(canvas, worldX, worldY)
@@ -1140,23 +1285,22 @@ export function PlannerCanvas({
       const updated = { ...item, x: newX, y: newY }
       draggedItemCurrentRef.current = updated
       didDragRef.current = true
-      setLocalItems((prev) =>
-        prev.map((it) => (it.id === dragItemId ? updated : it))
+      const draftItems = localItemsRef.current.map((entry) =>
+        entry.id === dragItemId ? updated : entry
       )
-      drawOverlay(
-        localItems.map((it) => (it.id === dragItemId ? updated : it))
-      )
+      recordInteractionFrame()
+      scheduleOverlayDraw(draftItems)
       return
     }
 
     const hitId = getItemAtCanvasPoint(canvas, worldX, worldY, localItems)
-    setHoveredItemId(hitId ?? null)
+    setHoveredItemIdIfChanged(hitId ?? null)
     if (hitId && hitId === selectedItemId) {
       const item = localItems.find((i) => i.id === hitId)
       const handle = item ? getHandleAtCanvasPoint(canvas, worldX, worldY, item) : null
-      setHoveredHandle(handle)
+      setHoveredHandleIfChanged(handle)
     } else {
-      setHoveredHandle(null)
+      setHoveredHandleIfChanged(null)
     }
   }
 
@@ -1166,9 +1310,9 @@ export function PlannerCanvas({
       return
     }
     if (isResizing) {
-      handleResizeEnd.current()
+      void finishResize()
     } else if (isDragging && dragItemId) {
-      handleDragEnd.current()
+      void finishDrag()
     }
   }
 
@@ -1194,7 +1338,7 @@ export function PlannerCanvas({
     if (e.touches.length >= 2) {
       e.preventDefault()
       if (touchResizeStateRef.current && isResizing) {
-        handleResizeEnd.current()
+        void finishResize()
       }
       clearLongPressTimer()
       touchDragStateRef.current = null
@@ -1290,7 +1434,7 @@ export function PlannerCanvas({
     if (e.touches.length >= 2) {
       e.preventDefault()
       if (touchResizeStateRef.current && isResizing) {
-        handleResizeEnd.current()
+        void finishResize()
       }
       clearLongPressTimer()
       touchDragStateRef.current = null
@@ -1321,6 +1465,7 @@ export function PlannerCanvas({
       setScale(newScale)
       setOffsetX(center.x - rect.left - pinch.anchorWorldX * newScale)
       setOffsetY(center.y - rect.top - pinch.anchorWorldY * newScale)
+      recordInteractionFrame()
       return
     }
 
@@ -1378,10 +1523,11 @@ export function PlannerCanvas({
     const updated = { ...item, x: newX, y: newY }
     draggedItemCurrentRef.current = updated
     didDragRef.current = true
-    setLocalItems((prev) =>
-      prev.map((entry) => (entry.id === touchDrag.bagId ? updated : entry))
+    const draftItems = localItemsRef.current.map((entry) =>
+      entry.id === touchDrag.bagId ? updated : entry
     )
-    drawOverlay(localItemsRef.current.map((entry) => (entry.id === touchDrag.bagId ? updated : entry)))
+    recordInteractionFrame()
+    scheduleOverlayDraw(draftItems)
   }
 
   const handleCanvasTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -1402,9 +1548,9 @@ export function PlannerCanvas({
     touchDragStateRef.current = null
 
     if (wasResizing && isResizing) {
-      handleResizeEnd.current()
+      void finishResize()
     } else if (wasDragging && isDragging) {
-      handleDragEnd.current()
+      void finishDrag()
     } else {
       setIsDragging(false)
       setDragItemId(null)
@@ -1419,9 +1565,9 @@ export function PlannerCanvas({
     touchResizeStateRef.current = null
     touchDragStateRef.current = null
     if (wasResizing && isResizing) {
-      handleResizeEnd.current()
+      void finishResize()
     } else if (isDragging) {
-      handleDragEnd.current()
+      void finishDrag()
     } else {
       setIsDragging(false)
       setDragItemId(null)
@@ -1501,7 +1647,7 @@ export function PlannerCanvas({
     requestGuardedAction(() => performDeleteFromMenu(), 'delete_box')
   }
 
-  const createBagAtViewportCenter = async () => {
+  const createBagAtViewportCenter = useCallback(async () => {
     const canvas = canvasRef.current
     const container = containerRef.current
     if (!canvas || !container || !imageLoaded || !userId) return
@@ -1550,9 +1696,7 @@ export function PlannerCanvas({
     onOpenDetails(tempId)
 
     setLocalItems((prev) => {
-      const updated = [...prev, optimisticItem]
-      drawOverlay(updated)
-      return updated
+      return [...prev, optimisticItem]
     })
 
     const { data, error: insertError } = await supabase
@@ -1576,9 +1720,7 @@ export function PlannerCanvas({
 
     if (insertError || !data) {
       setLocalItems((prev) => {
-        const updated = prev.filter((item) => item.id !== tempId)
-        drawOverlay(updated)
-        return updated
+        return prev.filter((item) => item.id !== tempId)
       })
       setSelectedItemId(null)
       setIsDetailsOpen(false)
@@ -1590,14 +1732,12 @@ export function PlannerCanvas({
     }
 
     setLocalItems((prev) => {
-      const updated = prev.map((item) => (item.id === tempId ? data : item))
-      drawOverlay(updated)
-      return updated
+      return prev.map((item) => (item.id === tempId ? data : item))
     })
     setSelectedItemId(data.id)
     setDetailsItemId((previous) => (previous === tempId ? data.id : previous))
     onOpenDetails(data.id)
-  }
+  }, [imageLoaded, onHighlightBagIdChange, onOpenDetails, packId, setSelectedItemId, userId])
 
   useEffect(() => {
     if (addBagRequestId <= handledAddBagRequestRef.current) return
@@ -1608,8 +1748,11 @@ export function PlannerCanvas({
     if (!imageLoaded || !userId) return
 
     handledAddBagRequestRef.current = addBagRequestId
-    void createBagAtViewportCenter()
-  }, [addBagRequestId, imageLoaded, isEditMode, userId])
+    const frameId = window.requestAnimationFrame(() => {
+      void createBagAtViewportCenter()
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [addBagRequestId, createBagAtViewportCenter, imageLoaded, isEditMode, userId])
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (contextMenu != null) {
@@ -1701,40 +1844,7 @@ export function PlannerCanvas({
     )
   }
 
-  const handleUpdateBag = async (
-    bagId: string,
-    patch: Partial<Pick<Bag, 'name' | 'color' | 'locked'> & { bag_weight_kg?: number }>
-  ) => {
-    const previousBag = localItemsRef.current.find((b) => b.id === bagId) ?? null
-    if (!previousBag) return
-
-    setLocalItems((prev) =>
-      prev.map((b) => (b.id === bagId ? { ...b, ...patch } : b))
-    )
-
-    const payload: Record<string, unknown> = {}
-    if (patch.name !== undefined) payload.name = patch.name
-    if (patch.color !== undefined) payload.color = patch.color
-    if (patch.bag_weight_kg !== undefined) payload.bag_weight_kg = patch.bag_weight_kg
-    if (patch.locked !== undefined) payload.locked = patch.locked
-
-    const { error: updateError } = await supabase
-      .from('bags')
-      .update(payload)
-      .eq('id', bagId)
-
-    if (updateError) {
-      setLocalItems((prev) =>
-        prev.map((b) => (b.id === bagId ? previousBag : b))
-      )
-      setDetailsSaveError(friendlySupabaseMessage(updateError, 'Failed to save bag'))
-      setTimeout(() => setDetailsSaveError(null), 5000)
-    } else {
-      setDetailsSaveError(null)
-    }
-  }
-
-  const applyToggleEditMode = () => {
+  const applyToggleEditMode = useCallback(() => {
     setContextMenu(null)
     if (isEditModeRef.current) {
       const dragId = dragItemIdRef.current
@@ -1772,7 +1882,7 @@ export function PlannerCanvas({
       }
     }
     onToggleEditMode()
-  }
+  }, [onToggleEditMode])
 
   const requestToggleEditMode = useCallback(() => {
     if (isEditModeRef.current) {
@@ -1782,7 +1892,7 @@ export function PlannerCanvas({
       return
     }
     applyToggleEditMode()
-  }, [requestGuardedAction])
+  }, [applyToggleEditMode, requestGuardedAction])
 
   useEffect(() => {
     if (!onRegisterToggleEditModeHandler) return
@@ -1826,12 +1936,16 @@ export function PlannerCanvas({
           }}
         >
           {/* Background Image */}
-          <img
+          <Image
             ref={imageRef}
             src={imageUrl}
             alt={name}
+            width={1}
+            height={1}
+            priority
+            unoptimized
             className="w-full h-auto block"
-            style={{ maxWidth: '100%' }}
+            style={{ width: '100%', height: 'auto', maxWidth: '100%' }}
           />
 
           {/* Canvas Overlay */}
@@ -1869,8 +1983,8 @@ export function PlannerCanvas({
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchCancel}
             onMouseLeave={() => {
-              setHoveredItemId(null)
-              setHoveredHandle(null)
+              setHoveredItemIdIfChanged(null)
+              setHoveredHandleIfChanged(null)
             }}
             onClick={handleCanvasClick}
             onDoubleClick={handleCanvasDoubleClick}
@@ -1927,7 +2041,6 @@ export function PlannerCanvas({
             isEditMode={isEditMode}
             onClose={requestCloseDetails}
             onToggleEditMode={requestToggleEditMode}
-            onUpdateBag={handleUpdateBag}
             requestMoveItemsAction={requestMoveItemsAction}
             enableEscapeClose={!isCoarsePointer}
             onSaveSuccess={(bagRow) =>

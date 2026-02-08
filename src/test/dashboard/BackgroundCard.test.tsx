@@ -2,6 +2,7 @@ import { BackgroundCard } from '@/app/(dashboard)/dashboard/BackgroundCard'
 import type { Background } from '@/types'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ImgHTMLAttributes } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const refreshMock = vi.fn()
@@ -17,11 +18,17 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/image', () => ({
   __esModule: true,
   // Simple img stub to avoid Next.js image warnings in tests
-  default: ({ fill: _fill, ...props }: any) => {
+  default: (props: ImgHTMLAttributes<HTMLImageElement> & { fill?: boolean }) => {
+    const { fill, ...imageProps } = props
+    void fill
     // eslint-disable-next-line jsx-a11y/alt-text, @next/next/no-img-element
-    return <img {...props} />
+    return <img {...imageProps} />
   },
 }))
+
+function assignFetchMock(fetchMock: ReturnType<typeof vi.fn>) {
+  global.fetch = fetchMock as unknown as typeof fetch
+}
 
 const mockBackground: Background = {
   id: 'bg-1',
@@ -64,7 +71,7 @@ describe('BackgroundCard delete button', () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: vi.fn() })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<BackgroundCard bg={mockBackground} />)
 
@@ -81,7 +88,7 @@ describe('BackgroundCard delete button', () => {
     const user = userEvent.setup()
     vi.spyOn(window, 'confirm').mockReturnValue(false)
     const fetchMock = vi.fn()
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<BackgroundCard bg={mockBackground} />)
 
@@ -98,7 +105,7 @@ describe('BackgroundCard delete button', () => {
       ok: false,
       json: vi.fn().mockResolvedValue({ error: 'Delete failed' }),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<BackgroundCard bg={mockBackground} />)
 
@@ -139,7 +146,7 @@ describe('BackgroundCard rename flow', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({ id: 'bg-1', name: 'Garage 2' }),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<BackgroundCard bg={mockBackground} />)
 
@@ -169,7 +176,7 @@ describe('BackgroundCard rename flow', () => {
       ok: false,
       json: vi.fn().mockResolvedValue({ error: 'Workspace name is already in use' }),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     render(<BackgroundCard bg={mockBackground} />)
 

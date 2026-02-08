@@ -35,7 +35,7 @@ export default async function PlannerPage({ params, searchParams }: PlannerPageP
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900 mb-2">Not Found</h1>
           <p className="text-slate-600 mb-4">
-            The background you're looking for doesn't exist or you don't have access to it.
+            The background you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
           </p>
           <Link
             href="/dashboard"
@@ -127,7 +127,6 @@ export default async function PlannerPage({ params, searchParams }: PlannerPageP
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <PlannerShell
-          backgroundId={backgroundId}
           backgroundName={background.name}
           imageUrl={background.image_url}
           packId={packId}

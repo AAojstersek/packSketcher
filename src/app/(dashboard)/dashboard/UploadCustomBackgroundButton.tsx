@@ -162,7 +162,8 @@ export function UploadCustomBackgroundButton({ className }: UploadCustomBackgrou
               Upload Custom Background
             </h3>
             <p className="mt-1 text-sm text-slate-600">
-              PNG, JPEG, or WEBP up to {formatFileSize(MAX_BACKGROUND_UPLOAD_BYTES)}.
+              PNG, JPEG, or WEBP up to {formatFileSize(MAX_BACKGROUND_UPLOAD_BYTES)}. Saved as
+              optimized black-and-white WebP.
             </p>
 
             <form className="mt-4 space-y-4" onSubmit={handleSubmit}>

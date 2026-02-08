@@ -13,6 +13,10 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+function assignFetchMock(fetchMock: ReturnType<typeof vi.fn>) {
+  global.fetch = fetchMock as unknown as typeof fetch
+}
+
 const renderButton = (overrides?: Partial<{ name: string; type: BackgroundType; imageUrl: string }>) =>
   render(
     <CreateFromTemplateButton
@@ -35,7 +39,7 @@ describe('CreateFromTemplateButton', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({ id: 'bg-1', name: 'Motorcycle 2' }),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     renderButton()
 
@@ -56,7 +60,7 @@ describe('CreateFromTemplateButton', () => {
       ok: false,
       json: vi.fn().mockResolvedValue({ error: 'Name already exists' }),
     })
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     renderButton()
 
@@ -71,7 +75,7 @@ describe('CreateFromTemplateButton', () => {
   it('shows generic error on network failure', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.fn().mockRejectedValue(new Error('Network down'))
-    global.fetch = fetchMock as any
+    assignFetchMock(fetchMock)
 
     renderButton()
 

@@ -144,7 +144,6 @@ describe('DetailsPanel save flow', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
         onSaveSuccess={onSaveSuccess}
       />
     )

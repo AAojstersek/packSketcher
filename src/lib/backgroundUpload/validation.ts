@@ -18,8 +18,8 @@ export interface BackgroundUploadValidationInput {
   name: string
   mimeType: string
   sizeBytes: number
-  width: number
-  height: number
+  width?: number | null
+  height?: number | null
 }
 
 export interface BackgroundUploadValidationResult {
@@ -62,7 +62,11 @@ export function validateBackgroundUploadInput(
     return { normalizedName, error: 'Image must be 10MB or smaller.' }
   }
 
-  if (!isPositiveFiniteNumber(input.width) || !isPositiveFiniteNumber(input.height)) {
+  const hasProvidedDimensions = input.width != null || input.height != null
+  if (
+    hasProvidedDimensions &&
+    (!isPositiveFiniteNumber(input.width ?? NaN) || !isPositiveFiniteNumber(input.height ?? NaN))
+  ) {
     return { normalizedName, error: 'Could not read image dimensions.' }
   }
 

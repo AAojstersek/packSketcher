@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
     const results = shapeItemsSearchResults(data ?? [])
     return NextResponse.json(results)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

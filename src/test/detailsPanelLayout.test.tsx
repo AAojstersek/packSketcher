@@ -130,7 +130,6 @@ describe('DetailsPanel visual structure and landmarks', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
       />
     )
 
@@ -153,7 +152,6 @@ describe('DetailsPanel visual structure and landmarks', () => {
         isEditMode={false}
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
       />
     )
 
@@ -174,7 +172,6 @@ describe('DetailsPanel visual structure and landmarks', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
       />
     )
 

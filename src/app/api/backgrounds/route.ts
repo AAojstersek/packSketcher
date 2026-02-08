@@ -7,6 +7,7 @@ import {
   extensionForBackgroundUploadMimeType,
   validateBackgroundUploadInput,
 } from '@/lib/backgroundUpload/validation'
+import { processCustomBackgroundImage } from '@/lib/backgroundUpload/processImage'
 import type { CreateBackgroundInput } from '@/types'
 
 const DEFAULT_BACKGROUND_WIDTH = 1920
@@ -15,6 +16,8 @@ const CUSTOM_BACKGROUND_BUCKET =
   process.env.SUPABASE_CUSTOM_BACKGROUNDS_BUCKET ??
   process.env.NEXT_PUBLIC_SUPABASE_CUSTOM_BACKGROUNDS_BUCKET ??
   'backgrounds'
+const BACKGROUND_CANONICAL_PROCESSING_ENABLED =
+  (process.env.BACKGROUND_CANONICAL_PROCESSING_ENABLED ?? 'true').trim().toLowerCase() !== 'false'
 
 function parsePositiveNumber(value: FormDataEntryValue | null): number | null {
   if (typeof value !== 'string') return null
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
       const width = parsePositiveNumber(formData.get('width'))
       const height = parsePositiveNumber(formData.get('height'))
 
-      if (!isFileLike(file) || width == null || height == null) {
+      if (!isFileLike(file)) {
         return NextResponse.json(
           { error: 'Invalid custom background upload payload.' },
           { status: 400 }
@@ -103,8 +106,34 @@ export async function POST(request: Request) {
         )
       }
 
-      const extension = extensionForBackgroundUploadMimeType(file.type)
-      if (!extension) {
+      let uploadPayload: File | Buffer = file
+      let uploadContentType = file.type
+      let outputWidth = width
+      let outputHeight = height
+      let extension: string | null = extensionForBackgroundUploadMimeType(file.type)
+
+      if (BACKGROUND_CANONICAL_PROCESSING_ENABLED) {
+        try {
+          const processed = await processCustomBackgroundImage(file)
+          uploadPayload = processed.buffer
+          uploadContentType = processed.mimeType
+          outputWidth = processed.width
+          outputHeight = processed.height
+          extension = processed.extension
+        } catch {
+          return NextResponse.json(
+            { error: 'Failed to process image. Please try another file.' },
+            { status: 400 }
+          )
+        }
+      } else if (outputWidth == null || outputHeight == null) {
+        return NextResponse.json(
+          { error: 'Could not read image dimensions.' },
+          { status: 400 }
+        )
+      }
+
+      if (!extension || outputWidth == null || outputHeight == null) {
         return NextResponse.json(
           { error: 'Unsupported file type.' },
           { status: 400 }
@@ -134,8 +163,8 @@ export async function POST(request: Request) {
       const { error: uploadError } = await supabase
         .storage
         .from(CUSTOM_BACKGROUND_BUCKET)
-        .upload(objectPath, file, {
-          contentType: file.type,
+        .upload(objectPath, uploadPayload, {
+          contentType: uploadContentType,
           upsert: false,
         })
 
@@ -157,14 +186,16 @@ export async function POST(request: Request) {
           name: finalName,
           type: 'custom',
           image_url: publicUrl,
-          width,
-          height,
+          width: outputWidth,
+          height: outputHeight,
           is_public: false,
         })
         .select()
         .single()
 
       if (error) {
+        // Best-effort cleanup to avoid orphaned objects when DB insert fails.
+        await supabase.storage.from(CUSTOM_BACKGROUND_BUCKET).remove([objectPath])
         const mapped = mapSupabaseError(error)
         return NextResponse.json(
           { error: mapped.message, code: mapped.code },

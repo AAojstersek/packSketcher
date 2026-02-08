@@ -22,6 +22,19 @@ describe('background upload validation', () => {
     })
   })
 
+  it('accepts uploads when dimensions are omitted', () => {
+    const result = validateBackgroundUploadInput({
+      name: '  Garage layout  ',
+      mimeType: 'image/png',
+      sizeBytes: 1024,
+    })
+
+    expect(result).toEqual({
+      normalizedName: 'Garage layout',
+      error: null,
+    })
+  })
+
   it('rejects unsupported mime types', () => {
     const result = validateBackgroundUploadInput({
       name: 'Workspace',

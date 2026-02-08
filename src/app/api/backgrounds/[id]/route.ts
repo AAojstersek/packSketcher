@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { mapSupabaseError } from '@/lib/supabase/errorMapping'
 import { MAX_NAME_LENGTH, normalizeName } from '@/lib/validation'
+import { parseStorageObjectPathFromPublicUrl } from '@/lib/backgroundUpload/storagePath'
+
+const CUSTOM_BACKGROUND_BUCKET =
+  process.env.SUPABASE_CUSTOM_BACKGROUNDS_BUCKET ??
+  process.env.NEXT_PUBLIC_SUPABASE_CUSTOM_BACKGROUNDS_BUCKET ??
+  'backgrounds'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 export async function GET(
   request: Request,
@@ -42,7 +49,7 @@ export async function GET(
     }
 
     return NextResponse.json(data)
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -69,7 +76,7 @@ export async function DELETE(
 
     const { data: existing, error: fetchError } = await supabase
       .from('backgrounds')
-      .select('id')
+      .select('id,type,image_url')
       .eq('id', id)
       .eq('user_id', user.id)
       .single()
@@ -95,8 +102,20 @@ export async function DELETE(
       )
     }
 
+    if (existing.type === 'custom' && typeof existing.image_url === 'string') {
+      const objectPath = parseStorageObjectPathFromPublicUrl(
+        existing.image_url,
+        CUSTOM_BACKGROUND_BUCKET,
+        { supabaseUrl: SUPABASE_URL }
+      )
+      if (objectPath) {
+        // Best-effort cleanup: workspace delete should still succeed if storage remove fails.
+        await supabase.storage.from(CUSTOM_BACKGROUND_BUCKET).remove([objectPath])
+      }
+    }
+
     return new NextResponse(null, { status: 204 })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

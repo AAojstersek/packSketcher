@@ -75,7 +75,7 @@ function setPointerMode(isCoarse: boolean) {
 function mockSupabaseBasics() {
   getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
 
-  fromMock.mockImplementation((_table: string) => ({
+  fromMock.mockImplementation(() => ({
     select: vi.fn(() => ({
       eq: vi.fn(() => ({
         order: vi.fn(async () => ({ data: [], error: null })),

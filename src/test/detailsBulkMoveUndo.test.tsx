@@ -164,7 +164,6 @@ describe('DetailsPanel bulk move + undo integration', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
         requestMoveItemsAction={(action) => {
           void action()
         }}
@@ -217,7 +216,6 @@ describe('DetailsPanel bulk move + undo integration', () => {
         isEditMode
         onClose={() => {}}
         onToggleEditMode={() => {}}
-        onUpdateBag={() => {}}
         requestMoveItemsAction={(action) => {
           void action()
         }}
