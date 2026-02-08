@@ -62,7 +62,7 @@ export function TemplatesSection({ templates, className }: TemplatesSectionProps
 
       setCollapsed(true)
       persistCollapsedState(true)
-      setToastMessage(`Added "${workspaceName}" to My Background.`)
+      setToastMessage(`Added "${workspaceName}" to My Workspaces.`)
 
       if (toastTimerRef.current != null) {
         window.clearTimeout(toastTimerRef.current)

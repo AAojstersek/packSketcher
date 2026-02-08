@@ -110,7 +110,7 @@ describe('TemplatesSection', () => {
       expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument()
     })
     expect(window.localStorage.getItem(storageKey)).toBe('true')
-    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Background.')
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Workspaces.')
   })
 
   it('resets toast timer and keeps latest workspace name on repeated success events', async () => {
@@ -124,7 +124,7 @@ describe('TemplatesSection', () => {
         })
       )
     })
-    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Background.')
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Workspaces.')
 
     act(() => {
       vi.advanceTimersByTime(2_000)
@@ -137,7 +137,7 @@ describe('TemplatesSection', () => {
         })
       )
     })
-    expect(screen.getByRole('status')).toHaveTextContent('Added "Bicycle 3" to My Background.')
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Bicycle 3" to My Workspaces.')
 
     act(() => {
       vi.advanceTimersByTime(2_500)

@@ -120,7 +120,7 @@ export default async function DashboardPage() {
           <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900 sm:text-base">My Background</h2>
+                <h2 className="text-sm font-semibold text-slate-900 sm:text-base">My Workspaces</h2>
                 <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">Continue where you left off.</p>
               </div>
               <UploadCustomBackgroundButton className="w-full justify-center text-xs sm:w-auto sm:text-sm" />
