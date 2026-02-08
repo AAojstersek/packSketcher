@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bag } from '@/types'
 import { PlannerCanvas } from '@/app/planner/[backgroundId]/PlannerCanvas'
@@ -133,6 +133,7 @@ describe('Planner mobile resize handles', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -215,6 +216,83 @@ describe('Planner mobile resize handles', () => {
     await waitFor(() => {
       expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
       expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
+    })
+  })
+
+  it('does not open context menu after long press on coarse pointer', async () => {
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    await waitFor(() => {
+      expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
+      expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
+    })
+
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.touchStart(canvas as HTMLCanvasElement, {
+        touches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+        targetTouches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+        changedTouches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+      })
+      vi.advanceTimersByTime(600)
+    })
+
+    expect(screen.queryByRole('menu', { name: 'Box actions' })).not.toBeInTheDocument()
+  })
+
+  it('does not open context menu from contextmenu event on coarse pointer', async () => {
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    await waitFor(() => {
+      expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
+      expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
+    })
+
+    act(() => {
+      fireEvent.contextMenu(canvas as HTMLCanvasElement, { clientX: 150, clientY: 150 })
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: 'Box actions' })).not.toBeInTheDocument()
     })
   })
 })

@@ -1,8 +1,9 @@
 import { TemplatesSection } from '@/app/(dashboard)/dashboard/TemplatesSection'
+import { TEMPLATE_CREATED_EVENT } from '@/app/(dashboard)/dashboard/events'
 import type { BackgroundType } from '@/types'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/app/(dashboard)/dashboard/TemplateGrid', () => ({
   TemplateGrid: ({ templates }: { templates: Array<{ name: string }> }) => (
@@ -41,6 +42,10 @@ describe('TemplatesSection', () => {
         },
       },
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders expanded by default', () => {
@@ -88,5 +93,61 @@ describe('TemplatesSection', () => {
     await user.click(screen.getByRole('button', { name: 'Expand' }))
     expect(screen.getByText('Motorcycle')).toBeInTheDocument()
     expect(window.localStorage.getItem(storageKey)).toBe('false')
+  })
+
+  it('collapses and shows success toast when template-created event is dispatched', async () => {
+    render(<TemplatesSection templates={templates} />)
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(TEMPLATE_CREATED_EVENT, {
+          detail: { workspaceName: 'Motorcycle 2' },
+        })
+      )
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument()
+    })
+    expect(window.localStorage.getItem(storageKey)).toBe('true')
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Background.')
+  })
+
+  it('resets toast timer and keeps latest workspace name on repeated success events', async () => {
+    vi.useFakeTimers()
+    render(<TemplatesSection templates={templates} />)
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(TEMPLATE_CREATED_EVENT, {
+          detail: { workspaceName: 'Motorcycle 2' },
+        })
+      )
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Motorcycle 2" to My Background.')
+
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(TEMPLATE_CREATED_EVENT, {
+          detail: { workspaceName: 'Bicycle 3' },
+        })
+      )
+    })
+    expect(screen.getByRole('status')).toHaveTextContent('Added "Bicycle 3" to My Background.')
+
+    act(() => {
+      vi.advanceTimersByTime(2_500)
+    })
+    expect(screen.getByRole('status')).toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

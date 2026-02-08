@@ -163,6 +163,52 @@ describe('DetailsPanel visual structure and landmarks', () => {
     expect(screen.queryByLabelText('Custom color')).not.toBeInTheDocument()
   })
 
+  it('shows mobile Delete box action only in coarse edit mode and calls handler', async () => {
+    const user = userEvent.setup()
+    const onDeleteBox = vi.fn()
+    const { rerender } = render(
+      <DetailsPanel
+        bag={bag}
+        isEditMode
+        isCoarsePointer
+        onDeleteBox={onDeleteBox}
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+      />
+    )
+
+    await screen.findByText('Tent')
+
+    const deleteButton = screen.getByRole('button', { name: 'Delete box' })
+    expect(deleteButton).toBeInTheDocument()
+    await user.click(deleteButton)
+    expect(onDeleteBox).toHaveBeenCalledTimes(1)
+
+    rerender(
+      <DetailsPanel
+        bag={bag}
+        isEditMode={false}
+        isCoarsePointer
+        onDeleteBox={onDeleteBox}
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Delete box' })).not.toBeInTheDocument()
+
+    rerender(
+      <DetailsPanel
+        bag={bag}
+        isEditMode
+        isCoarsePointer={false}
+        onDeleteBox={onDeleteBox}
+        onClose={() => {}}
+        onToggleEditMode={() => {}}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Delete box' })).not.toBeInTheDocument()
+  })
+
   it('shows bulk move section landmark only while multi-select is enabled', async () => {
     const user = userEvent.setup()
 

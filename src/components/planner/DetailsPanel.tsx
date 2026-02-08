@@ -164,8 +164,10 @@ function draftEqualsBag(draft: Draft, bag: Bag): boolean {
 export interface DetailsPanelProps {
   bag: Bag | null
   isEditMode: boolean
+  isCoarsePointer?: boolean
   onClose: () => void
   onToggleEditMode: () => void
+  onDeleteBox?: () => void
   onSaveSuccess?: (bagRow: Bag) => void
   saveError?: string | null
   clearSaveError?: () => void
@@ -186,8 +188,10 @@ export interface DetailsPanelHandle {
 export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(function DetailsPanel({
   bag,
   isEditMode,
+  isCoarsePointer = false,
   onClose,
   onToggleEditMode,
+  onDeleteBox,
   onSaveSuccess,
   saveError = null,
   clearSaveError,
@@ -1192,6 +1196,18 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
                   >
                     Close
                   </button>
+                  {isEditMode && isCoarsePointer && onDeleteBox && (
+                    <button
+                      type="button"
+                      className="rounded-xl border border-slate-200 bg-white p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-50"
+                      onClick={onDeleteBox}
+                      disabled={isSaving || isMovingItems || isUndoingMove}
+                      title="Delete box"
+                      aria-label="Delete box"
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap items-end gap-3">

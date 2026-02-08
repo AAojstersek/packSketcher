@@ -794,7 +794,18 @@ export function PlannerCanvas({
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
 
     const media = window.matchMedia('(pointer: coarse)')
-    const apply = () => setIsCoarsePointer(media.matches)
+    const apply = () => {
+      const coarse = media.matches
+      setIsCoarsePointer(coarse)
+      if (coarse) {
+        if (longPressTimerRef.current != null) {
+          window.clearTimeout(longPressTimerRef.current)
+          longPressTimerRef.current = null
+        }
+        longPressStartRef.current = null
+        setContextMenu(null)
+      }
+    }
     apply()
 
     if (typeof media.addEventListener === 'function') {
@@ -1327,6 +1338,7 @@ export function PlannerCanvas({
 
   const handleCanvasContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault()
+    if (isCoarsePointer) return
     if (!isEditMode) return
     const canvas = canvasRef.current
     if (!canvas || !imageLoaded || selectedItemId == null) return
@@ -1422,14 +1434,16 @@ export function PlannerCanvas({
       started: false,
     }
 
-    clearLongPressTimer()
-    longPressStartRef.current = { x: touch.clientX, y: touch.clientY }
-    longPressTimerRef.current = window.setTimeout(() => {
-      suppressNextClickRef.current = true
-      touchDragStateRef.current = null
-      openContextMenuAt(hitId, touch.clientX, touch.clientY)
+    if (!isCoarsePointer) {
       clearLongPressTimer()
-    }, LONG_PRESS_MS)
+      longPressStartRef.current = { x: touch.clientX, y: touch.clientY }
+      longPressTimerRef.current = window.setTimeout(() => {
+        suppressNextClickRef.current = true
+        touchDragStateRef.current = null
+        openContextMenuAt(hitId, touch.clientX, touch.clientY)
+        clearLongPressTimer()
+      }, LONG_PRESS_MS)
+    }
   }
 
   const handleCanvasTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -1600,11 +1614,7 @@ export function PlannerCanvas({
     }
   }
 
-  const performDeleteFromMenu = async () => {
-    const bagId = contextMenu?.bagId
-    if (!bagId) return
-    setContextMenu(null)
-
+  const deleteBagById = async (bagId: string) => {
     if (!confirm('Are you sure you want to delete this box? This cannot be undone.')) {
       return
     }
@@ -1625,7 +1635,7 @@ export function PlannerCanvas({
     }
 
     setLocalItems((prev) => prev.filter((item) => item.id !== bagId))
-    if (selectedItemId === bagId) {
+    if (previousSelectedId === bagId) {
       setSelectedItemId(null)
       onHighlightBagIdChange(null)
     }
@@ -1649,7 +1659,15 @@ export function PlannerCanvas({
   }
 
   const handleDeleteFromMenu = () => {
-    requestGuardedAction(() => performDeleteFromMenu(), 'delete_box')
+    const bagId = contextMenu?.bagId
+    if (!bagId) return
+    setContextMenu(null)
+    requestGuardedAction(() => deleteBagById(bagId), 'delete_box')
+  }
+
+  const handleDeleteFromDetails = () => {
+    if (!detailsItemId) return
+    requestGuardedAction(() => deleteBagById(detailsItemId), 'delete_box')
   }
 
   const createBagAtViewportCenter = useCallback(async () => {
@@ -2044,8 +2062,10 @@ export function PlannerCanvas({
             ref={detailsPanelRef}
             bag={detailsItem}
             isEditMode={isEditMode}
+            isCoarsePointer={isCoarsePointer}
             onClose={requestCloseDetails}
             onToggleEditMode={requestToggleEditMode}
+            onDeleteBox={handleDeleteFromDetails}
             requestMoveItemsAction={requestMoveItemsAction}
             enableEscapeClose={!isCoarsePointer}
             onSaveSuccess={(bagRow) =>

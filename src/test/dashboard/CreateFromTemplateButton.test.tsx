@@ -1,4 +1,5 @@
 import { CreateFromTemplateButton } from '@/app/(dashboard)/dashboard/CreateFromTemplateButton'
+import { TEMPLATE_CREATED_EVENT } from '@/app/(dashboard)/dashboard/events'
 import type { BackgroundType } from '@/types'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -35,6 +36,7 @@ afterEach(() => {
 describe('CreateFromTemplateButton', () => {
   it('posts to API and refreshes on success, relying on server suffix', async () => {
     const user = userEvent.setup()
+    const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent')
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({ id: 'bg-1', name: 'Motorcycle 2' }),
@@ -51,6 +53,13 @@ describe('CreateFromTemplateButton', () => {
       }))
       expect(refreshMock).toHaveBeenCalled()
     })
+
+    const templateCreatedEvent = dispatchEventSpy.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === TEMPLATE_CREATED_EVENT) as CustomEvent<{ workspaceName: string }> | undefined
+
+    expect(templateCreatedEvent).toBeDefined()
+    expect(templateCreatedEvent?.detail).toEqual({ workspaceName: 'Motorcycle 2' })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

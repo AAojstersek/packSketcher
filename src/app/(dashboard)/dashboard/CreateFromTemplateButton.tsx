@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { BackgroundType } from '@/types'
+import { dispatchTemplateCreatedEvent } from './events'
 
 interface CreateFromTemplateButtonProps {
   name: string
@@ -56,7 +57,15 @@ export function CreateFromTemplateButton({
         return
       }
 
-      // API returns finalized name/id; we rely on server for suffix logic and simply refresh list.
+      const finalName =
+        data &&
+        typeof data === 'object' &&
+        'name' in data &&
+        typeof (data as { name?: unknown }).name === 'string'
+          ? (data as { name: string }).name
+          : name
+
+      dispatchTemplateCreatedEvent({ workspaceName: finalName })
       notifyActivitiesRefresh()
       router.refresh()
     } catch {
