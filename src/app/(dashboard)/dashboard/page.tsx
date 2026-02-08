@@ -77,7 +77,7 @@ export default async function DashboardPage() {
       <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-6 lg:px-8">
         <div className="space-y-3 sm:space-y-6">
           {/* Header */}
-          <section className="rounded-2xl border border-slate-400 bg-slate-300 p-3 shadow-sm sm:p-5">
+          <section className="rounded-2xl border border-slate-300 bg-slate-200 p-3 shadow-sm sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-3 text-slate-900">
@@ -94,12 +94,12 @@ export default async function DashboardPage() {
               <LogoutButton />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 sm:mt-4">
-              <span className="rounded-full border border-slate-400 bg-white/90 px-3 py-1 font-medium text-slate-700">
+              <span className="rounded-full border border-slate-300 bg-white/80 px-3 py-1 font-medium text-slate-700">
                 {accessStateLabel(accessState)}
               </span>
               <Link
                 href="/billing"
-                className="rounded-full border border-slate-400 bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-white"
+                className="rounded-full border border-slate-300 bg-white/80 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-white"
               >
                 Billing
               </Link>

@@ -51,6 +51,8 @@ const LONG_PRESS_MS = 550
 const LONG_PRESS_MOVE_TOLERANCE = 10
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_MAX_DISTANCE_PX = 24
+const VIEWPORT_WHEEL_IDLE_MS = 120
+const USE_DIRECT_VIEWPORT_TRANSFORM = true
 const PLANNER_PERF_DEBUG = process.env.NEXT_PUBLIC_PLANNER_PERF_DEBUG === 'true'
 type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br'
 type TouchPoint = { clientX: number; clientY: number }
@@ -143,7 +145,7 @@ export function PlannerCanvas({
   const viewportRef = useRef<Viewport>({ scale: 1, offsetX: 0, offsetY: 0 })
   const pendingViewportRef = useRef<Viewport | null>(null)
   const viewportRafRef = useRef<number | null>(null)
-  const viewportWillChangeTimeoutRef = useRef<number | null>(null)
+  const wheelGestureIdleTimeoutRef = useRef<number | null>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [spacePressed, setSpacePressed] = useState(false)
   const spacePressedRef = useRef(false)
@@ -292,25 +294,25 @@ export function PlannerCanvas({
     viewportRef.current = nextViewport
     const transformLayer = transformLayerRef.current
     if (!transformLayer) return
+    if (USE_DIRECT_VIEWPORT_TRANSFORM) {
+      transformLayer.style.transform = `translate3d(${nextViewport.offsetX}px, ${nextViewport.offsetY}px, 0) scale(${nextViewport.scale})`
+      return
+    }
     transformLayer.style.setProperty('--planner-tx', `${nextViewport.offsetX}px`)
     transformLayer.style.setProperty('--planner-ty', `${nextViewport.offsetY}px`)
     transformLayer.style.setProperty('--planner-scale', `${nextViewport.scale}`)
   }, [])
 
-  const markViewportInteractionActive = useCallback(() => {
+  const beginViewportGesture = useCallback(() => {
     const transformLayer = transformLayerRef.current
     if (!transformLayer) return
     transformLayer.style.willChange = 'transform'
-    if (viewportWillChangeTimeoutRef.current != null) {
-      window.clearTimeout(viewportWillChangeTimeoutRef.current)
-    }
-    viewportWillChangeTimeoutRef.current = window.setTimeout(() => {
-      const currentLayer = transformLayerRef.current
-      if (currentLayer) {
-        currentLayer.style.willChange = 'auto'
-      }
-      viewportWillChangeTimeoutRef.current = null
-    }, 120)
+  }, [])
+
+  const endViewportGesture = useCallback(() => {
+    const transformLayer = transformLayerRef.current
+    if (!transformLayer) return
+    transformLayer.style.willChange = 'auto'
   }, [])
 
   const flushViewportUpdate = useCallback(() => {
@@ -324,12 +326,21 @@ export function PlannerCanvas({
   const queueViewportUpdate = useCallback(
     (nextViewport: Viewport) => {
       pendingViewportRef.current = nextViewport
-      markViewportInteractionActive()
       if (viewportRafRef.current != null) return
       viewportRafRef.current = window.requestAnimationFrame(flushViewportUpdate)
     },
-    [flushViewportUpdate, markViewportInteractionActive]
+    [flushViewportUpdate]
   )
+
+  const scheduleWheelGestureEnd = useCallback(() => {
+    if (wheelGestureIdleTimeoutRef.current != null) {
+      window.clearTimeout(wheelGestureIdleTimeoutRef.current)
+    }
+    wheelGestureIdleTimeoutRef.current = window.setTimeout(() => {
+      endViewportGesture()
+      wheelGestureIdleTimeoutRef.current = null
+    }, VIEWPORT_WHEEL_IDLE_MS)
+  }, [endViewportGesture])
 
   const clientToWorld = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
     const el = containerRef.current
@@ -678,12 +689,13 @@ export function PlannerCanvas({
         cancelAnimationFrame(viewportRafRef.current)
         viewportRafRef.current = null
       }
-      if (viewportWillChangeTimeoutRef.current != null) {
-        window.clearTimeout(viewportWillChangeTimeoutRef.current)
-        viewportWillChangeTimeoutRef.current = null
+      if (wheelGestureIdleTimeoutRef.current != null) {
+        window.clearTimeout(wheelGestureIdleTimeoutRef.current)
+        wheelGestureIdleTimeoutRef.current = null
       }
+      endViewportGesture()
     }
-  }, [])
+  }, [endViewportGesture])
 
   // Fetch and cache user ID on mount
   useEffect(() => {
@@ -1048,6 +1060,8 @@ export function PlannerCanvas({
     const el = containerRef.current
     if (!el) return
     e.preventDefault()
+    beginViewportGesture()
+    scheduleWheelGestureEnd()
     const viewport = getViewportSnapshot()
     if (e.ctrlKey) {
       const rect = el.getBoundingClientRect()
@@ -1070,7 +1084,15 @@ export function PlannerCanvas({
       })
     }
     recordInteractionFrame()
-  }, [MAX_ZOOM, MIN_ZOOM, getViewportSnapshot, queueViewportUpdate, recordInteractionFrame])
+  }, [
+    MAX_ZOOM,
+    MIN_ZOOM,
+    beginViewportGesture,
+    getViewportSnapshot,
+    queueViewportUpdate,
+    recordInteractionFrame,
+    scheduleWheelGestureEnd,
+  ])
 
   useEffect(() => {
     const el = containerRef.current
@@ -1177,6 +1199,7 @@ export function PlannerCanvas({
     const canvas = canvasRef.current
     if (!canvas || !imageLoaded) return
     if (spacePressedRef.current) {
+      beginViewportGesture()
       const viewport = getViewportSnapshot()
       panStartRef.current = { x: e.clientX, y: e.clientY }
       panStartOffsetRef.current = { x: viewport.offsetX, y: viewport.offsetY }
@@ -1306,6 +1329,16 @@ export function PlannerCanvas({
   }, [finishDrag, isDragging])
 
   useEffect(() => {
+    if (!isPanning) return
+    const onPanEnd = () => {
+      endViewportGesture()
+      setIsPanning(false)
+    }
+    window.addEventListener('mouseup', onPanEnd)
+    return () => window.removeEventListener('mouseup', onPanEnd)
+  }, [endViewportGesture, isPanning])
+
+  useEffect(() => {
     if (!isResizing) return
     const onResizeMove = (e: MouseEvent) => {
       const world = clientToWorld(e.clientX, e.clientY)
@@ -1373,6 +1406,7 @@ export function PlannerCanvas({
 
   const handleCanvasMouseUp = () => {
     if (isPanning) {
+      endViewportGesture()
       setIsPanning(false)
       return
     }
@@ -1405,6 +1439,7 @@ export function PlannerCanvas({
 
     if (e.touches.length >= 2) {
       e.preventDefault()
+      beginViewportGesture()
       if (touchResizeStateRef.current && isResizing) {
         void finishResize()
       }
@@ -1514,6 +1549,7 @@ export function PlannerCanvas({
       const first = e.touches[0]
       const second = e.touches[1]
       if (!pinchStateRef.current) {
+        beginViewportGesture()
         const center = getTouchCenter(first, second)
         const rect = canvas.getBoundingClientRect()
         const viewport = getViewportSnapshot()
@@ -1607,6 +1643,7 @@ export function PlannerCanvas({
   const handleCanvasTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (e.touches.length >= 2) return
     if (e.touches.length === 1) {
+      endViewportGesture()
       pinchStateRef.current = null
       clearLongPressTimer()
       touchDragStateRef.current = null
@@ -1614,6 +1651,7 @@ export function PlannerCanvas({
       return
     }
 
+    endViewportGesture()
     clearLongPressTimer()
     pinchStateRef.current = null
     const wasResizing = touchResizeStateRef.current != null
@@ -1633,6 +1671,7 @@ export function PlannerCanvas({
   }
 
   const handleCanvasTouchCancel = () => {
+    endViewportGesture()
     clearLongPressTimer()
     pinchStateRef.current = null
     const wasResizing = touchResizeStateRef.current != null
@@ -2019,9 +2058,15 @@ export function PlannerCanvas({
             ref={transformLayerRef}
             className="relative w-full"
             style={{
-              transform:
-                'translate3d(var(--planner-tx, 0px), var(--planner-ty, 0px), 0) scale(var(--planner-scale, 1))',
+              transform: USE_DIRECT_VIEWPORT_TRANSFORM
+                ? 'translate3d(0px, 0px, 0) scale(1)'
+                : 'translate3d(var(--planner-tx, 0px), var(--planner-ty, 0px), 0) scale(var(--planner-scale, 1))',
               transformOrigin: '0 0',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transformStyle: 'preserve-3d',
+              WebkitTransformStyle: 'preserve-3d',
+              contain: 'paint',
               willChange: 'auto',
             }}
           >
@@ -2035,7 +2080,13 @@ export function PlannerCanvas({
               priority
               unoptimized
               className="w-full h-auto block"
-              style={{ width: '100%', height: 'auto', maxWidth: '100%' }}
+              style={{
+                width: '100%',
+                height: 'auto',
+                maxWidth: '100%',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+              }}
             />
 
             {/* Canvas Overlay */}
@@ -2063,6 +2114,8 @@ export function PlannerCanvas({
                               ? 'pointer'
                               : 'crosshair',
                 touchAction: 'none',
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
               }}
               onMouseDown={handleCanvasMouseDown}
               onMouseMove={handleCanvasMouseMove}

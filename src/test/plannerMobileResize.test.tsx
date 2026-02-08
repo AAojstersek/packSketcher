@@ -296,7 +296,77 @@ describe('Planner mobile resize handles', () => {
     })
   })
 
-  it('updates transform layer custom properties during coarse-pointer pinch', async () => {
+  it('updates transform layer style during coarse-pointer pinch', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback): number => {
+      callback(performance.now())
+      return 1
+    })
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    const image = screen.getByRole('img', { name: 'Garage' })
+    const transformLayer = image.parentElement as HTMLDivElement | null
+    expect(transformLayer).toBeTruthy()
+
+    act(() => {
+      fireEvent.touchStart(canvas as HTMLCanvasElement, {
+        touches: [
+          { identifier: 1, clientX: 180, clientY: 180 },
+          { identifier: 2, clientX: 240, clientY: 180 },
+        ],
+        targetTouches: [
+          { identifier: 1, clientX: 180, clientY: 180 },
+          { identifier: 2, clientX: 240, clientY: 180 },
+        ],
+        changedTouches: [
+          { identifier: 1, clientX: 180, clientY: 180 },
+          { identifier: 2, clientX: 240, clientY: 180 },
+        ],
+      })
+    })
+
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+    })
+
+    await waitFor(() => {
+      const transformValue = transformLayer?.style.transform ?? ''
+      expect(transformValue).toContain('translate3d(')
+      expect(transformValue).toContain('scale(')
+      expect(transformValue).not.toContain('scale(1)')
+    })
+  })
+
+  it('toggles transform layer will-change during pinch gesture lifecycle', async () => {
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback): number => {
       callback(performance.now())
       return 1
@@ -341,26 +411,24 @@ describe('Planner mobile resize handles', () => {
       ],
     })
 
-    fireEvent.touchMove(canvas as HTMLCanvasElement, {
-      touches: [
-        { identifier: 1, clientX: 170, clientY: 170 },
-        { identifier: 2, clientX: 290, clientY: 170 },
-      ],
-      targetTouches: [
-        { identifier: 1, clientX: 170, clientY: 170 },
-        { identifier: 2, clientX: 290, clientY: 170 },
-      ],
-      changedTouches: [
-        { identifier: 1, clientX: 170, clientY: 170 },
-        { identifier: 2, clientX: 290, clientY: 170 },
-      ],
+    expect(transformLayer?.style.willChange).toBe('transform')
+
+    act(() => {
+      fireEvent.touchEnd(canvas as HTMLCanvasElement, {
+        touches: [],
+        targetTouches: [],
+        changedTouches: [
+          { identifier: 1, clientX: 180, clientY: 180 },
+          { identifier: 2, clientX: 240, clientY: 180 },
+        ],
+      })
     })
 
-    await waitFor(() => {
-      const scaleRaw = transformLayer?.style.getPropertyValue('--planner-scale') ?? ''
-      expect(scaleRaw).not.toBe('')
-      expect(Number(scaleRaw)).toBeGreaterThan(1)
+    await act(async () => {
+      await Promise.resolve()
     })
+
+    expect(transformLayer?.style.willChange).toBe('auto')
   })
 
   it('keeps drag persistence functional after pinch zoom on coarse pointer', async () => {
