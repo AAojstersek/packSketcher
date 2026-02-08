@@ -94,7 +94,7 @@ export default async function DashboardPage() {
               <LogoutButton />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600 sm:mt-4">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-700">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">
                 {accessStateLabel(accessState)}
               </span>
               <Link
