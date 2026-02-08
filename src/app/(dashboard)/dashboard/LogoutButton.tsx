@@ -24,7 +24,7 @@ export function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={loading}
-      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-sm"
+      className="rounded-lg border border-slate-400 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 sm:text-sm"
     >
       {loading ? 'Signing out…' : 'Logout'}
     </button>

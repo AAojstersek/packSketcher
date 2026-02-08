@@ -54,6 +54,7 @@ const DOUBLE_TAP_MAX_DISTANCE_PX = 24
 const PLANNER_PERF_DEBUG = process.env.NEXT_PUBLIC_PLANNER_PERF_DEBUG === 'true'
 type ResizeHandle = 'tl' | 'tr' | 'bl' | 'br'
 type TouchPoint = { clientX: number; clientY: number }
+type Viewport = { scale: number; offsetX: number; offsetY: number }
 
 interface ResizeStart {
   startX: number
@@ -113,6 +114,7 @@ export function PlannerCanvas({
   const imageRef = useRef<HTMLImageElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const transformLayerRef = useRef<HTMLDivElement>(null)
   const imageNaturalWidthRef = useRef<number>(0)
   const imageNaturalHeightRef = useRef<number>(0)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -138,12 +140,10 @@ export function PlannerCanvas({
   const resizeHandleRef = useRef<ResizeHandle | null>(null)
   const didResizeRef = useRef(false)
   const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle | null>(null)
-  const [scale, setScale] = useState(1)
-  const [offsetX, setOffsetX] = useState(0)
-  const [offsetY, setOffsetY] = useState(0)
-  const scaleRef = useRef(1)
-  const offsetXRef = useRef(0)
-  const offsetYRef = useRef(0)
+  const viewportRef = useRef<Viewport>({ scale: 1, offsetX: 0, offsetY: 0 })
+  const pendingViewportRef = useRef<Viewport | null>(null)
+  const viewportRafRef = useRef<number | null>(null)
+  const viewportWillChangeTimeoutRef = useRef<number | null>(null)
   const [isPanning, setIsPanning] = useState(false)
   const [spacePressed, setSpacePressed] = useState(false)
   const spacePressedRef = useRef(false)
@@ -227,9 +227,6 @@ export function PlannerCanvas({
     highlightBagIdRef.current = highlightBagId
     localItemsRef.current = localItems
     resizeHandleRef.current = resizeHandle
-    scaleRef.current = scale
-    offsetXRef.current = offsetX
-    offsetYRef.current = offsetY
     isEditModeRef.current = isEditMode
     isDetailsOpenRef.current = isDetailsOpen
   }, [
@@ -238,10 +235,7 @@ export function PlannerCanvas({
     isDetailsOpen,
     isEditMode,
     localItems,
-    offsetX,
-    offsetY,
     resizeHandle,
-    scale,
     selectedItemId,
   ])
 
@@ -290,29 +284,65 @@ export function PlannerCanvas({
     setHoveredHandle((previous) => (previous === nextHandle ? previous : nextHandle))
   }
 
-  function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
-    const el = containerRef.current
-    if (!el) return { x: 0, y: 0 }
-    const rect = el.getBoundingClientRect()
-    const mouseX = clientX - rect.left
-    const mouseY = clientY - rect.top
-    return {
-      x: (mouseX - offsetX) / scale,
-      y: (mouseY - offsetY) / scale,
-    }
-  }
+  const getViewportSnapshot = useCallback((): Viewport => {
+    return pendingViewportRef.current ?? viewportRef.current
+  }, [])
 
-  function clientToWorldFromRefs(clientX: number, clientY: number): { x: number; y: number } {
+  const applyViewportToDom = useCallback((nextViewport: Viewport) => {
+    viewportRef.current = nextViewport
+    const transformLayer = transformLayerRef.current
+    if (!transformLayer) return
+    transformLayer.style.setProperty('--planner-tx', `${nextViewport.offsetX}px`)
+    transformLayer.style.setProperty('--planner-ty', `${nextViewport.offsetY}px`)
+    transformLayer.style.setProperty('--planner-scale', `${nextViewport.scale}`)
+  }, [])
+
+  const markViewportInteractionActive = useCallback(() => {
+    const transformLayer = transformLayerRef.current
+    if (!transformLayer) return
+    transformLayer.style.willChange = 'transform'
+    if (viewportWillChangeTimeoutRef.current != null) {
+      window.clearTimeout(viewportWillChangeTimeoutRef.current)
+    }
+    viewportWillChangeTimeoutRef.current = window.setTimeout(() => {
+      const currentLayer = transformLayerRef.current
+      if (currentLayer) {
+        currentLayer.style.willChange = 'auto'
+      }
+      viewportWillChangeTimeoutRef.current = null
+    }, 120)
+  }, [])
+
+  const flushViewportUpdate = useCallback(() => {
+    viewportRafRef.current = null
+    const nextViewport = pendingViewportRef.current
+    pendingViewportRef.current = null
+    if (!nextViewport) return
+    applyViewportToDom(nextViewport)
+  }, [applyViewportToDom])
+
+  const queueViewportUpdate = useCallback(
+    (nextViewport: Viewport) => {
+      pendingViewportRef.current = nextViewport
+      markViewportInteractionActive()
+      if (viewportRafRef.current != null) return
+      viewportRafRef.current = window.requestAnimationFrame(flushViewportUpdate)
+    },
+    [flushViewportUpdate, markViewportInteractionActive]
+  )
+
+  const clientToWorld = useCallback((clientX: number, clientY: number): { x: number; y: number } => {
     const el = containerRef.current
     if (!el) return { x: 0, y: 0 }
+    const viewport = getViewportSnapshot()
     const rect = el.getBoundingClientRect()
     const mouseX = clientX - rect.left
     const mouseY = clientY - rect.top
     return {
-      x: (mouseX - offsetXRef.current) / scaleRef.current,
-      y: (mouseY - offsetYRef.current) / scaleRef.current,
+      x: (mouseX - viewport.offsetX) / viewport.scale,
+      y: (mouseY - viewport.offsetY) / viewport.scale,
     }
-  }
+  }, [getViewportSnapshot])
 
   function canvasToOriginal(
     canvas: HTMLCanvasElement,
@@ -579,6 +609,10 @@ export function PlannerCanvas({
   }, [scheduleOverlayDraw])
 
   useEffect(() => {
+    applyViewportToDom(viewportRef.current)
+  }, [applyViewportToDom])
+
+  useEffect(() => {
     const img = imageRef.current
     if (!img) return
 
@@ -587,6 +621,7 @@ export function PlannerCanvas({
       imageNaturalWidthRef.current = img.naturalWidth
       imageNaturalHeightRef.current = img.naturalHeight
       setImageLoaded(true)
+      applyViewportToDom(viewportRef.current)
       updateCanvasSize()
     }
 
@@ -596,7 +631,7 @@ export function PlannerCanvas({
       img.addEventListener('load', handleImageLoad)
       return () => img.removeEventListener('load', handleImageLoad)
     }
-  }, [imageUrl, updateCanvasSize])
+  }, [applyViewportToDom, imageUrl, updateCanvasSize])
 
   useEffect(() => {
     if (!imageLoaded) return
@@ -638,6 +673,14 @@ export function PlannerCanvas({
       if (drawRafRef.current != null) {
         cancelAnimationFrame(drawRafRef.current)
         drawRafRef.current = null
+      }
+      if (viewportRafRef.current != null) {
+        cancelAnimationFrame(viewportRafRef.current)
+        viewportRafRef.current = null
+      }
+      if (viewportWillChangeTimeoutRef.current != null) {
+        window.clearTimeout(viewportWillChangeTimeoutRef.current)
+        viewportWillChangeTimeoutRef.current = null
       }
     }
   }, [])
@@ -1005,26 +1048,29 @@ export function PlannerCanvas({
     const el = containerRef.current
     if (!el) return
     e.preventDefault()
+    const viewport = getViewportSnapshot()
     if (e.ctrlKey) {
       const rect = el.getBoundingClientRect()
-      const scaleVal = scaleRef.current
-      const offsetXVal = offsetXRef.current
-      const offsetYVal = offsetYRef.current
-      const worldX = (e.clientX - rect.left - offsetXVal) / scaleVal
-      const worldY = (e.clientY - rect.top - offsetYVal) / scaleVal
+      const worldX = (e.clientX - rect.left - viewport.offsetX) / viewport.scale
+      const worldY = (e.clientY - rect.top - viewport.offsetY) / viewport.scale
       const newScale = Math.max(
         MIN_ZOOM,
-        Math.min(MAX_ZOOM, scaleVal * (e.deltaY < 0 ? 1.1 : 0.9))
+        Math.min(MAX_ZOOM, viewport.scale * (e.deltaY < 0 ? 1.1 : 0.9))
       )
-      setScale(newScale)
-      setOffsetX(e.clientX - rect.left - worldX * newScale)
-      setOffsetY(e.clientY - rect.top - worldY * newScale)
+      queueViewportUpdate({
+        scale: newScale,
+        offsetX: e.clientX - rect.left - worldX * newScale,
+        offsetY: e.clientY - rect.top - worldY * newScale,
+      })
     } else {
-      setOffsetX(offsetXRef.current - e.deltaX)
-      setOffsetY(offsetYRef.current - e.deltaY)
+      queueViewportUpdate({
+        scale: viewport.scale,
+        offsetX: viewport.offsetX - e.deltaX,
+        offsetY: viewport.offsetY - e.deltaY,
+      })
     }
     recordInteractionFrame()
-  }, [recordInteractionFrame])
+  }, [MAX_ZOOM, MIN_ZOOM, getViewportSnapshot, queueViewportUpdate, recordInteractionFrame])
 
   useEffect(() => {
     const el = containerRef.current
@@ -1131,8 +1177,9 @@ export function PlannerCanvas({
     const canvas = canvasRef.current
     if (!canvas || !imageLoaded) return
     if (spacePressedRef.current) {
+      const viewport = getViewportSnapshot()
       panStartRef.current = { x: e.clientX, y: e.clientY }
-      panStartOffsetRef.current = { x: offsetX, y: offsetY }
+      panStartOffsetRef.current = { x: viewport.offsetX, y: viewport.offsetY }
       setIsPanning(true)
       return
     }
@@ -1261,7 +1308,7 @@ export function PlannerCanvas({
   useEffect(() => {
     if (!isResizing) return
     const onResizeMove = (e: MouseEvent) => {
-      const world = clientToWorldFromRefs(e.clientX, e.clientY)
+      const world = clientToWorld(e.clientX, e.clientY)
       applyResizeAtCanvasPoint(world.x, world.y)
     }
     const onResizeEnd = () => {
@@ -1273,14 +1320,18 @@ export function PlannerCanvas({
       window.removeEventListener('mousemove', onResizeMove)
       window.removeEventListener('mouseup', onResizeEnd)
     }
-  }, [applyResizeAtCanvasPoint, finishResize, isResizing])
+  }, [applyResizeAtCanvasPoint, clientToWorld, finishResize, isResizing])
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return
     if (isPanning) {
-      setOffsetX(panStartOffsetRef.current.x + (e.clientX - panStartRef.current.x))
-      setOffsetY(panStartOffsetRef.current.y + (e.clientY - panStartRef.current.y))
+      const viewport = getViewportSnapshot()
+      queueViewportUpdate({
+        scale: viewport.scale,
+        offsetX: panStartOffsetRef.current.x + (e.clientX - panStartRef.current.x),
+        offsetY: panStartOffsetRef.current.y + (e.clientY - panStartRef.current.y),
+      })
       recordInteractionFrame()
       return
     }
@@ -1366,11 +1417,12 @@ export function PlannerCanvas({
       const second = e.touches[1]
       const center = getTouchCenter(first, second)
       const rect = canvas.getBoundingClientRect()
-      const anchorWorldX = (center.x - rect.left - offsetXRef.current) / scaleRef.current
-      const anchorWorldY = (center.y - rect.top - offsetYRef.current) / scaleRef.current
+      const viewport = getViewportSnapshot()
+      const anchorWorldX = (center.x - rect.left - viewport.offsetX) / viewport.scale
+      const anchorWorldY = (center.y - rect.top - viewport.offsetY) / viewport.scale
       pinchStateRef.current = {
         startDistance: getTouchDistance(first, second),
-        startScale: scaleRef.current,
+        startScale: viewport.scale,
         anchorWorldX,
         anchorWorldY,
       }
@@ -1464,11 +1516,12 @@ export function PlannerCanvas({
       if (!pinchStateRef.current) {
         const center = getTouchCenter(first, second)
         const rect = canvas.getBoundingClientRect()
+        const viewport = getViewportSnapshot()
         pinchStateRef.current = {
           startDistance: getTouchDistance(first, second),
-          startScale: scaleRef.current,
-          anchorWorldX: (center.x - rect.left - offsetXRef.current) / scaleRef.current,
-          anchorWorldY: (center.y - rect.top - offsetYRef.current) / scaleRef.current,
+          startScale: viewport.scale,
+          anchorWorldX: (center.x - rect.left - viewport.offsetX) / viewport.scale,
+          anchorWorldY: (center.y - rect.top - viewport.offsetY) / viewport.scale,
         }
       }
 
@@ -1481,9 +1534,11 @@ export function PlannerCanvas({
         Math.min(MAX_ZOOM, pinch.startScale * (distance / pinch.startDistance))
       )
       const rect = canvas.getBoundingClientRect()
-      setScale(newScale)
-      setOffsetX(center.x - rect.left - pinch.anchorWorldX * newScale)
-      setOffsetY(center.y - rect.top - pinch.anchorWorldY * newScale)
+      queueViewportUpdate({
+        scale: newScale,
+        offsetX: center.x - rect.left - pinch.anchorWorldX * newScale,
+        offsetY: center.y - rect.top - pinch.anchorWorldY * newScale,
+      })
       recordInteractionFrame()
       return
     }
@@ -1682,9 +1737,10 @@ export function PlannerCanvas({
     const width = 250
     const height = 120
     const rect = container.getBoundingClientRect()
-    const centerCanvasX = (rect.width / 2 - offsetXRef.current) / scaleRef.current
-    const centerCanvasY = (rect.height / 2 - offsetYRef.current) / scaleRef.current
-    const centerOriginal = canvasToOriginal(canvas, centerCanvasX, centerCanvasY)
+    const viewport = getViewportSnapshot()
+    const centerCanvasX = (rect.width / 2 - viewport.offsetX) / viewport.scale
+    const topAreaCanvasY = (rect.height * 0.2 - viewport.offsetY) / viewport.scale
+    const centerOriginal = canvasToOriginal(canvas, centerCanvasX, topAreaCanvasY)
 
     let x = Math.round(centerOriginal.x - width / 2)
     let y = Math.round(centerOriginal.y - height / 2)
@@ -1760,7 +1816,15 @@ export function PlannerCanvas({
     setSelectedItemId(data.id)
     setDetailsItemId((previous) => (previous === tempId ? data.id : previous))
     onOpenDetails(data.id)
-  }, [imageLoaded, onHighlightBagIdChange, onOpenDetails, packId, setSelectedItemId, userId])
+  }, [
+    getViewportSnapshot,
+    imageLoaded,
+    onHighlightBagIdChange,
+    onOpenDetails,
+    packId,
+    setSelectedItemId,
+    userId,
+  ])
 
   useEffect(() => {
     if (addBagRequestId <= handledAddBagRequestRef.current) return
@@ -1947,71 +2011,75 @@ export function PlannerCanvas({
   return (
     <div className="w-full">
       <div className="relative">
-      <div
-        ref={containerRef}
-        className="relative w-full bg-white rounded-lg shadow-lg overflow-hidden"
-      >
         <div
-          className="relative w-full"
-          style={{
-            transform: `translate(${offsetX}px, ${offsetY}px) scale(${scale})`,
-            transformOrigin: '0 0',
-          }}
+          ref={containerRef}
+          className="relative w-full bg-white rounded-lg shadow-lg overflow-hidden"
         >
-          {/* Background Image */}
-          <Image
-            ref={imageRef}
-            src={imageUrl}
-            alt={name}
-            width={1}
-            height={1}
-            priority
-            unoptimized
-            className="w-full h-auto block"
-            style={{ width: '100%', height: 'auto', maxWidth: '100%' }}
-          />
-
-          {/* Canvas Overlay */}
-          <canvas
-            ref={canvasRef}
-            className="absolute top-0 left-0"
+          <div
+            ref={transformLayerRef}
+            className="relative w-full"
             style={{
+              transform:
+                'translate3d(var(--planner-tx, 0px), var(--planner-ty, 0px), 0) scale(var(--planner-scale, 1))',
+              transformOrigin: '0 0',
+              willChange: 'auto',
+            }}
+          >
+            {/* Background Image */}
+            <Image
+              ref={imageRef}
+              src={imageUrl}
+              alt={name}
+              width={1}
+              height={1}
+              priority
+              unoptimized
+              className="w-full h-auto block"
+              style={{ width: '100%', height: 'auto', maxWidth: '100%' }}
+            />
+
+            {/* Canvas Overlay */}
+            <canvas
+              ref={canvasRef}
+              className="absolute top-0 left-0"
+              style={{
                 cursor: isPanning
-                ? 'grabbing'
-                : spacePressed
-                  ? 'grab'
-                  : isDragging
-                    ? 'grabbing'
-                    : isResizing
-                      ? resizeHandle === 'tl' || resizeHandle === 'br'
-                        ? 'nwse-resize'
-                        : 'nesw-resize'
-                      : hoveredHandle
-                        ? hoveredHandle === 'tl' || hoveredHandle === 'br'
+                  ? 'grabbing'
+                  : spacePressed
+                    ? 'grab'
+                    : isDragging
+                      ? 'grabbing'
+                      : isResizing
+                        ? resizeHandle === 'tl' || resizeHandle === 'br'
                           ? 'nwse-resize'
                           : 'nesw-resize'
-                        : hoveredItemId && hoveredItemId === selectedItemId
-                          ? 'grab'
-                        : hoveredItemId
-                            ? 'pointer'
-                            : 'crosshair',
+                        : hoveredHandle
+                          ? hoveredHandle === 'tl' || hoveredHandle === 'br'
+                            ? 'nwse-resize'
+                            : 'nesw-resize'
+                          : hoveredItemId && hoveredItemId === selectedItemId
+                            ? 'grab'
+                            : hoveredItemId
+                              ? 'pointer'
+                              : 'crosshair',
                 touchAction: 'none',
-            }}
-            onMouseDown={handleCanvasMouseDown}
-            onMouseMove={handleCanvasMouseMove}
-            onMouseUp={handleCanvasMouseUp}
-            onContextMenu={handleCanvasContextMenu}
-            onTouchStart={handleCanvasTouchStart}
-            onTouchMove={handleCanvasTouchMove}
-            onTouchEnd={handleCanvasTouchEnd}
-            onTouchCancel={handleCanvasTouchCancel}
-            onMouseLeave={() => {
-              setHoveredItemIdIfChanged(null)
-              setHoveredHandleIfChanged(null)
-            }}
-            onClick={handleCanvasClick}
-            onDoubleClick={handleCanvasDoubleClick}
-          />
+              }}
+              onMouseDown={handleCanvasMouseDown}
+              onMouseMove={handleCanvasMouseMove}
+              onMouseUp={handleCanvasMouseUp}
+              onContextMenu={handleCanvasContextMenu}
+              onTouchStart={handleCanvasTouchStart}
+              onTouchMove={handleCanvasTouchMove}
+              onTouchEnd={handleCanvasTouchEnd}
+              onTouchCancel={handleCanvasTouchCancel}
+              onMouseLeave={() => {
+                setHoveredItemIdIfChanged(null)
+                setHoveredHandleIfChanged(null)
+              }}
+              onClick={handleCanvasClick}
+              onDoubleClick={handleCanvasDoubleClick}
+            />
+          </div>
         </div>
       </div>
       {contextMenu && (
@@ -2123,8 +2191,6 @@ export function PlannerCanvas({
           </div>
         </div>
       )}
-      </div>
-
       {/* Error Message */}
       {error && (
         <div className="mt-2 text-sm text-red-600 text-center">

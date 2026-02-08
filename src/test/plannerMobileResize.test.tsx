@@ -295,6 +295,245 @@ describe('Planner mobile resize handles', () => {
       expect(screen.queryByRole('menu', { name: 'Box actions' })).not.toBeInTheDocument()
     })
   })
+
+  it('updates transform layer custom properties during coarse-pointer pinch', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback): number => {
+      callback(performance.now())
+      return 1
+    })
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+    const image = screen.getByRole('img', { name: 'Garage' })
+    const transformLayer = image.parentElement as HTMLDivElement | null
+    expect(transformLayer).toBeTruthy()
+
+    fireEvent.touchStart(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+    })
+
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+    })
+
+    await waitFor(() => {
+      const scaleRaw = transformLayer?.style.getPropertyValue('--planner-scale') ?? ''
+      expect(scaleRaw).not.toBe('')
+      expect(Number(scaleRaw)).toBeGreaterThan(1)
+    })
+  })
+
+  it('keeps drag persistence functional after pinch zoom on coarse pointer', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback): number => {
+      callback(performance.now())
+      return 1
+    })
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    fireEvent.touchStart(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+    })
+
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+    })
+
+    fireEvent.touchEnd(canvas as HTMLCanvasElement, {
+      touches: [],
+      targetTouches: [],
+      changedTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+    })
+
+    fireEvent.touchStart(canvas as HTMLCanvasElement, {
+      touches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+      targetTouches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+      changedTouches: [{ identifier: 1, clientX: 150, clientY: 150 }],
+    })
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [{ identifier: 1, clientX: 190, clientY: 190 }],
+      targetTouches: [{ identifier: 1, clientX: 190, clientY: 190 }],
+      changedTouches: [{ identifier: 1, clientX: 190, clientY: 190 }],
+    })
+    fireEvent.touchEnd(canvas as HTMLCanvasElement, {
+      touches: [],
+      targetTouches: [],
+      changedTouches: [{ identifier: 1, clientX: 190, clientY: 190 }],
+    })
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          x: expect.any(Number),
+          y: expect.any(Number),
+        })
+      )
+      expect(updateEqMock).toHaveBeenCalledWith('id', 'bag-1')
+    })
+  })
+
+  it('does not trigger extra overlay draw churn during pinch updates', async () => {
+    const { fillRect } = mockCanvas2dContext()
+
+    const { container } = render(
+      <PlannerCanvas
+        imageUrl="/garage.png"
+        name="Garage"
+        packId="pack-1"
+        bags={[baseBag]}
+        isEditMode
+        selectedBagId="bag-1"
+        highlightBagId={null}
+        onToggleEditMode={() => {}}
+        onSelectBagId={() => {}}
+        onHighlightBagIdChange={() => {}}
+        addBagRequestId={0}
+        onOpenDetails={() => {}}
+      />
+    )
+    loadPlannerImage()
+
+    const canvas = container.querySelector('canvas')
+    expect(canvas).toBeTruthy()
+
+    await waitFor(() => {
+      expect((canvas as HTMLCanvasElement).width).toBeGreaterThan(0)
+      expect((canvas as HTMLCanvasElement).height).toBeGreaterThan(0)
+    })
+
+    fillRect.mockClear()
+
+    fireEvent.touchStart(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 180, clientY: 180 },
+        { identifier: 2, clientX: 240, clientY: 180 },
+      ],
+    })
+
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 170, clientY: 170 },
+        { identifier: 2, clientX: 290, clientY: 170 },
+      ],
+    })
+
+    fireEvent.touchMove(canvas as HTMLCanvasElement, {
+      touches: [
+        { identifier: 1, clientX: 165, clientY: 165 },
+        { identifier: 2, clientX: 300, clientY: 165 },
+      ],
+      targetTouches: [
+        { identifier: 1, clientX: 165, clientY: 165 },
+        { identifier: 2, clientX: 300, clientY: 165 },
+      ],
+      changedTouches: [
+        { identifier: 1, clientX: 165, clientY: 165 },
+        { identifier: 2, clientX: 300, clientY: 165 },
+      ],
+    })
+
+    expect(fillRect).not.toHaveBeenCalled()
+  })
 })
 
 describe('Planner desktop drag persistence', () => {
