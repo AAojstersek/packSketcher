@@ -1595,20 +1595,20 @@ export const DetailsPanel = forwardRef<DetailsPanelHandle, DetailsPanelProps>(fu
             <section
               role="region"
               aria-labelledby="details-section-totals"
-              className="rounded-2xl border border-slate-200 bg-white p-3.5"
+              className="rounded-2xl border border-slate-200 bg-white p-2 md:p-2.5"
             >
               <h4
                 id="details-section-totals"
-                className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
               >
                 Totals
               </h4>
-              <div className="grid grid-cols-2 gap-2 text-sm text-slate-700">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+              <div className="grid grid-cols-2 gap-1.5 text-sm text-slate-700">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                   <p className="text-xs text-slate-500">Items</p>
-                  <p className="text-base font-semibold text-slate-900">{totals.itemCount}</p>
+                  <p className="text-sm font-semibold text-slate-900">{totals.itemCount}</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                   <p className="text-xs text-slate-500">Bag total</p>
                   <p className="text-sm font-semibold text-slate-900">{formatKg(totals.totalWeightKg)}</p>
                 </div>

@@ -103,6 +103,10 @@ export default function DashboardHelpPage() {
                 <li>If save fails, check the inline error message and retry.</li>
               </ul>
             </section>
+
+            <p className="mt-8 pt-6 border-t border-slate-200 text-slate-600">
+              Contact: <a href="mailto:packsketcher@gmail.com" className="text-slate-900 underline hover:text-slate-700">packsketcher@gmail.com</a>
+            </p>
           </div>
         </div>
       </div>
