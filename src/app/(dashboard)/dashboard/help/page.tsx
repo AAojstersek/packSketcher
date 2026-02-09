@@ -25,9 +25,7 @@ export default function DashboardHelpPage() {
             </Link>
           </div>
 
-          <p className="text-sm text-slate-600">
-            Use this page as a quick guide. Full guide in repository: <code>docs/user-guide.md</code>
-          </p>
+          {/* Reserved for a future video tutorial link. */}
 
           <nav aria-label="Help sections" className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
             <ul className="flex flex-wrap gap-2 text-xs sm:text-sm">

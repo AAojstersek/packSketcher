@@ -12,5 +12,6 @@ describe('Dashboard help page', () => {
     expect(screen.getByRole('heading', { name: 'Mobile Gestures' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Troubleshooting' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Back to Dashboard' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.queryByText(/docs\/user-guide\.md/i)).not.toBeInTheDocument()
   })
 })
