@@ -303,6 +303,7 @@ Last updated: 2026-02-06
 - [x] Add DB access decision functions (`get_access_state`, `has_app_access`) and `app_access` view.
 - [x] Add RLS policies for user-owned billing/access reads.
 - [x] Add app-level access states (`no_access`, `beta_access`, `active_subscription`, `past_due`, `canceled`) in TypeScript.
+- [x] Harden access SQL (`security_invoker` view/functions + ignore caller `p_email` to prevent spoofing) and add SQL contract tests.
 
 ### Billing routes + UI
 - [x] Add checkout route (`POST /api/billing/checkout`).

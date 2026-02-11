@@ -16,21 +16,17 @@ function normalizeAccessState(value: unknown): AccessState {
 }
 
 interface EntitlementRpcClient {
-  rpc: (
-    fn: string,
-    params: { p_user_id: string; p_email?: string | null }
-  ) =>
+  rpc: (fn: string, params: { p_user_id: string }) =>
     | PromiseLike<{ data: unknown; error: { message: string } | null }>
     | { data: unknown; error: { message: string } | null }
 }
 
 export async function getAccessState(
   client: EntitlementRpcClient,
-  user: Pick<User, 'id' | 'email'>
+  user: Pick<User, 'id'>
 ): Promise<AccessState> {
   const { data, error } = await client.rpc('get_access_state', {
     p_user_id: user.id,
-    p_email: user.email ?? null,
   })
 
   if (error) {
@@ -42,11 +38,10 @@ export async function getAccessState(
 
 export async function hasAppAccess(
   client: EntitlementRpcClient,
-  user: Pick<User, 'id' | 'email'>
+  user: Pick<User, 'id'>
 ): Promise<boolean> {
   const { data, error } = await client.rpc('has_app_access', {
     p_user_id: user.id,
-    p_email: user.email ?? null,
   })
 
   if (error) {
