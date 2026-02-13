@@ -1,6 +1,6 @@
 \# PackSketcher (MVP) — Developer-Ready Specification
 
-Last updated: 2026-02-07
+Last updated: 2026-02-11
 
 ## 1) Goal + Scope
 Build a responsive web app (desktop + mobile) that lets authenticated users visually plan where **Boxes** go on a **Workspace** (background image), then manage **Items** inside each Box, including:
@@ -28,7 +28,7 @@ Extension track (planned next phases):
 ## 3) Target Stack / Architecture
 - Frontend: Next.js App Router (current repo).
 - Auth/DB: Supabase (RLS enabled).
-- Deployment: Vercel + Supabase (single production environment for MVP).
+- Deployment: Vercel + Supabase (staging + production environments required before paid launch).
 
 Design principle: keep app robust and minimal; enforce critical invariants at the DB level (trimmed, non-empty, unique names).
 
@@ -324,3 +324,73 @@ Phase 13 (details panel redesign):
 - New visual layout improves clarity without changing business behavior.
 - Existing interaction test scenarios continue to pass (open/close, save/cancel, unsaved guard, move conflicts, undo).
 - Desktop and mobile layouts remain usable and readable.
+
+## 17) Launch Strategy (Pre-Implementation Baseline)
+- Launch type: Soft launch.
+- Target audience: Global English.
+- Funnel: Public landing + immediate signup.
+- Support model: Email-only.
+- Launch window: `2026-02-25` to `2026-03-04` (soft launch window).
+
+## 18) Commercial Model (Freemium v1)
+Free plan limits:
+- max 1 workspace per user
+- max 5 boxes per workspace
+- max 15 items per box
+
+Pro plan:
+- unlimited usage limits
+- billing via existing Stripe subscription flow
+
+Upgrade entry points:
+- workspace creation limit hit
+- add-box limit hit
+- add-item limit hit
+- billing page CTA
+
+## 19) Quota Enforcement Strategy (v1)
+v1 policy:
+- UI enforcement for box/item limits
+- minimal API enforcement for workspace limit
+
+Explicitly documented risk:
+- box/item limits are not fully tamper-proof in v1
+
+Post-launch hardening note:
+- v2 target = DB/RPC-backed quota enforcement
+
+## 20) Public Interfaces to Implement
+Type contracts:
+- `PlanTier = 'free' | 'pro'`
+- `PlanLimits` object with workspace/box/item caps
+
+API/UI error contracts:
+- `PLAN_LIMIT_WORKSPACES`
+- `PLAN_LIMIT_BOXES`
+- `PLAN_LIMIT_ITEMS`
+
+User-facing fallback copy:
+- "Free plan limit reached. Upgrade to Pro."
+
+## 21) Analytics & Monitoring Requirements
+Recommended free stack:
+- PostHog + Sentry
+
+Required launch events:
+- `signup_started`, `signup_completed`
+- `workspace_created`
+- `limit_hit_workspace`, `limit_hit_box`, `limit_hit_item`
+- `checkout_started`, `checkout_completed`
+
+Required alerts:
+- billing webhook failures (4xx/5xx spikes)
+- auth/login error spike
+- subscription sync failures
+
+## 22) Go/No-Go Acceptance Criteria (Before Implementation)
+- Product decisions frozen.
+- Pricing/plan semantics frozen.
+- Legal drafts available.
+- Infra audited.
+- Event taxonomy approved.
+- Ticket breakdown ready.

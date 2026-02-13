@@ -1,6 +1,6 @@
 # PackSketcher (MVP) — TODO Checklist
 
-Last updated: 2026-02-06
+Last updated: 2026-02-11
 
 ## Prompt Map (When to Use Which Prompt)
 - Prompt 0: test harness setup (Vitest + RTL + jsdom).
@@ -323,3 +323,56 @@ Last updated: 2026-02-06
 - [x] Add backup/restore runbook (`docs/phase14_launch_ops.md`).
 - [ ] Add monitoring/alerts (webhook failures, auth, subscription sync).
 - [ ] Add legal pages (Terms, Privacy, Refund policy).
+
+## Phase 15 — Pre-Implementation Readiness (Launch + Marketing)
+### Product decisions freeze
+- [ ] Freeze launch model: soft launch (public onboarding, controlled rollout).
+- [ ] Freeze market: Global English.
+- [ ] Freeze freemium offer: Free = 1 workspace / 5 boxes / 15 items per box.
+- [ ] Freeze paid offer: Pro = unlimited workspaces/boxes/items.
+- [ ] Freeze quota enforcement v1: UI + minimal API guard (workspace limit API-side).
+
+### Commercial + pricing
+- [ ] Finalize monthly and yearly Pro pricing (EUR/USD) and map to Stripe price IDs.
+- [ ] Finalize messaging copy for Free vs Pro value proposition.
+- [ ] Define upgrade triggers in UX (when and where CTA appears).
+
+### Legal readiness
+- [ ] Prepare Terms of Service draft.
+- [ ] Prepare Privacy Policy draft.
+- [ ] Prepare Refund Policy draft.
+- [ ] Define data retention statement (activities/logs/support email).
+- [ ] Confirm legal pages are required before paid acquisition starts.
+
+### Infrastructure + security readiness
+- [ ] Verify production Supabase project readiness (RLS, backups, auth settings).
+- [ ] Verify production Vercel project + custom domain readiness.
+- [ ] Verify Stripe live-mode setup (product, prices, webhook endpoint, secrets).
+- [ ] Verify auth redirect URLs (`/login`, `/signup`, `/forgot-password`, `/reset-password`).
+- [ ] Verify access-control flags strategy for launch (`ACCESS_CONTROL_ENABLED`, signup behavior).
+
+### Observability + analytics readiness
+- [ ] Select free analytics stack (recommended: PostHog + Sentry).
+- [ ] Define event taxonomy before implementation.
+- [ ] Define alert thresholds for webhook failures and auth spikes.
+- [ ] Define launch dashboard metrics (signup conversion, upgrade conversion, activation).
+
+### Support + operations readiness
+- [ ] Define support channel (email-only) and response-time target.
+- [ ] Prepare support macros (signup issue, billing issue, quota issue, refund request).
+- [ ] Define incident/rollback owner and communication procedure.
+- [ ] Define daily launch triage cadence for first 14 days.
+
+### Marketing asset readiness
+- [ ] Finalize public landing page structure and copy blocks.
+- [ ] Produce core demo asset set (hero screenshots + 60-90s demo video).
+- [ ] Prepare first 3 community launch posts (problem, demo, CTA).
+- [ ] Define publishing schedule for launch week.
+
+### Go/No-Go gate (must be green before coding starts)
+- [ ] Product/pricing/legal/infra/analytics decisions signed off.
+- [ ] Scope split into implementation tickets (engineering-ready).
+- [ ] Acceptance criteria approved for freemium + launch funnel.
+
+Implementation preparation note:
+No feature implementation starts until Phase 15 Go/No-Go gate is complete.

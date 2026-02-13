@@ -7,7 +7,6 @@ import {
   extensionForBackgroundUploadMimeType,
   validateBackgroundUploadInput,
 } from '@/lib/backgroundUpload/validation'
-import { processCustomBackgroundImage } from '@/lib/backgroundUpload/processImage'
 import type { CreateBackgroundInput } from '@/types'
 
 const DEFAULT_BACKGROUND_WIDTH = 1920
@@ -114,6 +113,7 @@ export async function POST(request: Request) {
 
       if (BACKGROUND_CANONICAL_PROCESSING_ENABLED) {
         try {
+          const { processCustomBackgroundImage } = await import('@/lib/backgroundUpload/processImage')
           const processed = await processCustomBackgroundImage(file)
           uploadPayload = processed.buffer
           uploadContentType = processed.mimeType

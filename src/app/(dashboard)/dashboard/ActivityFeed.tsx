@@ -34,24 +34,32 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
   }, [activities])
 
   useEffect(() => {
-    void refreshActivities()
+    if (collapsed) return
 
-    const handleRefresh = () => {
-      void refreshActivities()
-    }
+    void refreshActivities()
 
     const intervalId = window.setInterval(() => {
       void refreshActivities()
     }, REFRESH_INTERVAL_MS)
 
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [collapsed, refreshActivities])
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (collapsed) return
+      void refreshActivities()
+    }
+
     window.addEventListener(REFRESH_EVENT, handleRefresh)
     window.addEventListener('focus', handleRefresh)
     return () => {
-      window.clearInterval(intervalId)
       window.removeEventListener(REFRESH_EVENT, handleRefresh)
       window.removeEventListener('focus', handleRefresh)
     }
-  }, [refreshActivities])
+  }, [collapsed, refreshActivities])
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">

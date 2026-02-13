@@ -40,6 +40,12 @@ describe('ActivityFeed', () => {
     expect(screen.getByText('2h ago')).toBeInTheDocument()
   })
 
+  it('does not fetch activities while the feed stays collapsed', () => {
+    const fetchMock = vi.mocked(globalThis.fetch)
+    render(<ActivityFeed activities={activities} />)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('collapses and expands the feed', async () => {
     const user = userEvent.setup()
     render(<ActivityFeed activities={activities} />)
@@ -85,5 +91,17 @@ describe('ActivityFeed', () => {
       expect(screen.getByText('Deleted box Left')).toBeInTheDocument()
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores refresh event while collapsed', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch)
+    render(<ActivityFeed activities={activities} />)
+
+    window.dispatchEvent(new Event('packsketcher:activities-refresh'))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Created item Tent')).not.toBeInTheDocument()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

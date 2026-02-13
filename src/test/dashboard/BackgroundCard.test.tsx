@@ -64,6 +64,14 @@ describe('BackgroundCard action placement', () => {
     expect(renameWrapper).toHaveClass('absolute', 'top-2', 'left-2')
     expect(deleteWrapper).toHaveClass('absolute', 'top-2', 'right-2')
   })
+
+  it('sets responsive sizes hint for workspace image', () => {
+    render(<BackgroundCard bg={mockBackground} />)
+    expect(screen.getByRole('img', { name: 'Garage' })).toHaveAttribute(
+      'sizes',
+      '(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw'
+    )
+  })
 })
 
 describe('BackgroundCard delete button', () => {

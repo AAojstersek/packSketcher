@@ -6,9 +6,8 @@ import { GlobalItemSearch } from './GlobalItemSearch'
 import { ActivityFeed } from './ActivityFeed'
 import { UploadCustomBackgroundButton } from './UploadCustomBackgroundButton'
 import type { Background } from '@/types'
-import type { ActivityResponse } from '@/lib/activities'
+import { shapeActivitiesResponse, type ActivityResponse } from '@/lib/activities'
 import { accessStateLabel, getAccessState } from '@/lib/access/entitlements'
-import { headers } from 'next/headers'
 import Image from 'next/image'
 import Link from 'next/link'
 
@@ -16,17 +15,17 @@ const LOCAL_TEMPLATES = [
   {
     name: 'Motorcycle',
     type: 'motorcycle' as const,
-    imageUrl: '/ozadja/motoOzadje.png',
+    imageUrl: '/ozadja/motoOzadje.webp',
   },
   {
     name: 'Bicycle',
     type: 'bicycle' as const,
-    imageUrl: '/ozadja/bikeOzadje.png',
+    imageUrl: '/ozadja/bikeOzadje.webp',
   },
   {
     name: 'Backpack',
     type: 'backpack' as const,
-    imageUrl: '/ozadja/backpackOzadje.png',
+    imageUrl: '/ozadja/backpackOzadje.webp',
   },
 ]
 
@@ -39,37 +38,31 @@ export default async function DashboardPage() {
     return <div>Please log in</div>
   }
 
-  const accessState = await getAccessState(supabase, user)
+  const [accessState, backgroundsResult, activitiesResult] = await Promise.all([
+    getAccessState(supabase, user),
+    supabase
+      .from('backgrounds')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('activities')
+      .select('id, event_type, message, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20),
+  ])
 
-  // Fetch dashboard sections via API routes
-  let backgrounds: Background[] = []
-  let activities: ActivityResponse[] = []
-  try {
-    const headersList = await headers()
-    const host = headersList.get('host') || 'localhost:3000'
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-    const requestHeaders = { Cookie: headersList.get('cookie') || '' }
+  const backgrounds: Background[] = backgroundsResult.error ? [] : (backgroundsResult.data ?? [])
+  const activities: ActivityResponse[] = activitiesResult.error
+    ? []
+    : shapeActivitiesResponse(activitiesResult.data ?? [])
 
-    const [backgroundsResponse, activitiesResponse] = await Promise.all([
-      fetch(`${protocol}://${host}/api/backgrounds`, {
-        cache: 'no-store',
-        headers: requestHeaders,
-      }),
-      fetch(`${protocol}://${host}/api/activities`, {
-        cache: 'no-store',
-        headers: requestHeaders,
-      }),
-    ])
-
-    if (backgroundsResponse.ok) {
-      backgrounds = await backgroundsResponse.json()
-    }
-
-    if (activitiesResponse.ok) {
-      activities = await activitiesResponse.json()
-    }
-  } catch (error) {
-    console.error('Failed to fetch dashboard data:', error)
+  if (backgroundsResult.error) {
+    console.error('Failed to fetch backgrounds for dashboard:', backgroundsResult.error)
+  }
+  if (activitiesResult.error) {
+    console.error('Failed to fetch activities for dashboard:', activitiesResult.error)
   }
 
   return (
