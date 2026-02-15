@@ -48,6 +48,7 @@ For paid access + beta invite rollout, configure:
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_PRICE_MONTHLY`
 - `STRIPE_PRICE_YEARLY`
+- `STRIPE_TRIAL_DAYS` (optional, default `14`; set `0` or invalid to disable trial)
 - `ADMIN_INVITE_TOKEN`
 
 Optional rollout flags:

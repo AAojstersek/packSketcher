@@ -10,6 +10,20 @@ interface CheckoutRequestBody {
   interval?: 'monthly' | 'yearly'
 }
 
+function getStripeTrialDays(): number | null {
+  const raw = process.env.STRIPE_TRIAL_DAYS
+  if (raw == null || raw.trim() === '') {
+    return 14
+  }
+
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null
+  }
+
+  return parsed
+}
+
 function siteUrlFromRequest(request: Request): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL
   if (configured) {
@@ -64,6 +78,24 @@ async function ensureStripeCustomerId(
   return customer.id
 }
 
+async function shouldApplyStripeTrial(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('billing_subscriptions')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return !data
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient()
@@ -78,6 +110,10 @@ export async function POST(request: Request) {
     const priceId = getStripePriceId(interval)
 
     const stripeCustomerId = await ensureStripeCustomerId(supabase, user)
+    const configuredTrialDays = getStripeTrialDays()
+    const trialDays = configuredTrialDays != null && await shouldApplyStripeTrial(supabase, user.id)
+      ? configuredTrialDays
+      : null
     const baseUrl = siteUrlFromRequest(request)
     const session = await createCheckoutSession({
       customerId: stripeCustomerId,
@@ -85,6 +121,7 @@ export async function POST(request: Request) {
       successUrl: `${baseUrl}/billing?checkout=success`,
       cancelUrl: `${baseUrl}/subscribe?checkout=cancel`,
       userId: user.id,
+      trialDays,
     })
 
     if (!session.url) {

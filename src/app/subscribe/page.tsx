@@ -7,7 +7,7 @@ export default function SubscribePage() {
       <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-900">Choose your plan</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Pick monthly or yearly billing to unlock PackSketcher.
+          Start with a 14-day free trial. Cancel anytime before trial ends.
         </p>
 
         <div className="mt-6">

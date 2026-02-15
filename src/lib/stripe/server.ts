@@ -114,6 +114,7 @@ export async function createCheckoutSession(params: {
   successUrl: string
   cancelUrl: string
   userId: string
+  trialDays?: number | null
 }): Promise<StripeCheckoutSession> {
   const form = new URLSearchParams()
   form.set('mode', 'subscription')
@@ -125,6 +126,13 @@ export async function createCheckoutSession(params: {
   form.set('allow_promotion_codes', 'true')
   form.set('client_reference_id', params.userId)
   form.set('subscription_data[metadata][supabase_user_id]', params.userId)
+  if (
+    typeof params.trialDays === 'number' &&
+    Number.isInteger(params.trialDays) &&
+    params.trialDays > 0
+  ) {
+    form.set('subscription_data[trial_period_days]', String(params.trialDays))
+  }
   return stripeRequest<StripeCheckoutSession>('/checkout/sessions', { method: 'POST', formBody: form })
 }
 

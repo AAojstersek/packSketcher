@@ -17,6 +17,7 @@ Last updated: 2026-02-07
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_PRICE_MONTHLY`
 - `STRIPE_PRICE_YEARLY`
+- `STRIPE_TRIAL_DAYS` (optional, default `14`; trial only for users without prior subscription record)
 - `ADMIN_INVITE_TOKEN`
 - Optional rollout toggles:
   - `ACCESS_CONTROL_ENABLED=true`
@@ -68,3 +69,46 @@ Last updated: 2026-02-07
   - Terms
   - Privacy
   - Refund policy
+
+## 8) 14-Day Trial Staging Smoke Flow
+Goal: confirm first-time subscribers get `billing_subscriptions.status = trialing`.
+
+### 8.1 Staging env
+- In Vercel staging environment, set `STRIPE_TRIAL_DAYS=14`.
+- Verify these are also set and correct for staging:
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_WEBHOOK_SECRET`
+  - `STRIPE_PRICE_MONTHLY`
+  - `STRIPE_PRICE_YEARLY`
+  - `NEXT_PUBLIC_SITE_URL`
+- Redeploy staging after env changes.
+
+### 8.2 Stripe test mode
+- Verify `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_YEARLY` point to test-mode recurring prices.
+- Verify webhook endpoint is `https://<staging-domain>/api/billing/webhook`.
+- Verify webhook event list includes:
+  - `checkout.session.completed`
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.payment_failed`
+- Verify webhook signing secret matches `STRIPE_WEBHOOK_SECRET` in staging env.
+
+### 8.3 Checkout smoke
+- Use a new test user with no prior `billing_subscriptions` row.
+- Login to staging app, open `/subscribe`, choose monthly or yearly, and complete checkout.
+- Wait a few seconds for webhook processing.
+
+### 8.4 Supabase verification
+- Run queries from `docs/08_trial_smoke_checks.sql`.
+- Expected:
+  - latest subscription row for test user has `status = 'trialing'`
+  - recent webhook rows in `billing_events` have non-null `processed_at`
+
+### 8.5 Troubleshooting
+- `status = active` instead of `trialing`:
+  - test user likely had prior `billing_subscriptions` row, or trial was not applied.
+- no `billing_subscriptions` row:
+  - webhook endpoint/signing secret mismatch, or webhook delivery failure.
+- cannot access `/dashboard` after checkout:
+  - verify latest `billing_subscriptions.status`, `current_period_end`, and access-control flags.

@@ -194,6 +194,7 @@ export function PlannerCanvas({
     anchorWorldX: number
     anchorWorldY: number
   } | null>(null)
+  const autoCenteredSearchKeyRef = useRef<string | null>(null)
   const drawRafRef = useRef<number | null>(null)
   const pendingDrawItemsRef = useRef<Bag[] | null>(null)
   const perfMetricsRef = useRef<{
@@ -676,6 +677,45 @@ export function PlannerCanvas({
     isCoarsePointer,
     localItems,
     scheduleOverlayDraw,
+    selectedItemId,
+  ])
+
+  useEffect(() => {
+    if (!imageLoaded) return
+    if (!selectedItemId || highlightBagId !== selectedItemId) return
+
+    const autoCenterKey = `${packId}:${selectedItemId}`
+    if (autoCenteredSearchKeyRef.current === autoCenterKey) return
+
+    const canvas = canvasRef.current
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) return
+
+    const imageNaturalWidth = imageNaturalWidthRef.current
+    const imageNaturalHeight = imageNaturalHeightRef.current
+    if (imageNaturalWidth <= 0 || imageNaturalHeight <= 0) return
+
+    const targetBag = localItemsRef.current.find((item) => item.id === selectedItemId)
+    if (!targetBag) return
+
+    const scaleX = canvas.width / imageNaturalWidth
+    const scaleY = canvas.height / imageNaturalHeight
+    const bagCenterX = (targetBag.x + targetBag.width / 2) * scaleX
+    const bagCenterY = (targetBag.y + targetBag.height / 2) * scaleY
+    const viewport = getViewportSnapshot()
+
+    queueViewportUpdate({
+      scale: viewport.scale,
+      offsetX: canvas.width / 2 - bagCenterX * viewport.scale,
+      offsetY: canvas.height / 2 - bagCenterY * viewport.scale,
+    })
+    autoCenteredSearchKeyRef.current = autoCenterKey
+  }, [
+    getViewportSnapshot,
+    highlightBagId,
+    imageLoaded,
+    localItems,
+    packId,
+    queueViewportUpdate,
     selectedItemId,
   ])
 

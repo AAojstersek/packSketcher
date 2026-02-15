@@ -128,7 +128,7 @@ UI:
 Clicking a result:
 - Navigates to the relevant workspace planner.
 - Selects the destination box and highlights it (glow + selected).
-- Does not auto-pan/zoom.
+- Auto-centers the destination box without changing zoom.
 - Does not auto-open details panel.
 
 ## 7) Planner (Workspace)
@@ -309,7 +309,7 @@ Functional checks:
 - Move/resize on desktop + mobile; persists.
 - Reorder via context menu; persists and swaps 1 step.
 - Delete workspace (dashboard) cascades boxes/items.
-- Dashboard search: 3+ chars, matches name+description, limit 20, sorted by last_moved_at; click selects+highlights box.
+- Dashboard search: 3+ chars, matches name+description, limit 20, sorted by last_moved_at; click selects+highlights box and auto-centers it without zoom change.
 - Bulk move items across workspaces with conflict rename flow.
 - Undo toast for move works within 10s.
 - Details panel redesign keeps save/cancel, unsaved guard, conflict flow, and undo behavior intact.

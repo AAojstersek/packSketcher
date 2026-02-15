@@ -65,6 +65,10 @@ export function SubscribeActions() {
         </button>
       </div>
 
+      <p className="text-xs text-slate-500">
+        Trial applies to eligible new subscribers.
+      </p>
+
       {error && (
         <p className="text-sm text-red-600" role="alert">
           {error}
