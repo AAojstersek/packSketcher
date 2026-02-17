@@ -14,7 +14,7 @@ interface DecideBoxLabelLayoutArgs {
   horizontalMaxWidth: number
   verticalMaxRun: number
   measureText: (value: string) => number
-  isMobile: boolean
+  canRotateVertical: boolean
   options?: BoxLabelLayoutDecisionOptions
 }
 
@@ -71,7 +71,7 @@ export function formatBoxLabel(
 
 /**
  * Decide whether to draw the label horizontally or vertically.
- * Vertical is considered only on mobile and only when horizontal would be hidden
+ * Vertical is considered only when rotation is enabled and horizontal would be hidden
  * or aggressively truncated.
  */
 export function decideBoxLabelLayout({
@@ -79,7 +79,7 @@ export function decideBoxLabelLayout({
   horizontalMaxWidth,
   verticalMaxRun,
   measureText,
-  isMobile,
+  canRotateVertical,
   options = {},
 }: DecideBoxLabelLayoutArgs): BoxLabelLayout | null {
   const name = rawName.trim()
@@ -88,14 +88,14 @@ export function decideBoxLabelLayout({
   const ellipsis = options.ellipsis ?? '...'
   const horizontal = formatBoxLabel(name, horizontalMaxWidth, measureText, { ellipsis })
   if (!horizontal) {
-    if (!isMobile) return null
+    if (!canRotateVertical) return null
     const verticalWhenHorizontalHidden = formatBoxLabel(name, verticalMaxRun, measureText, { ellipsis })
     return verticalWhenHorizontalHidden
       ? { text: verticalWhenHorizontalHidden, orientation: 'vertical' }
       : null
   }
 
-  if (!isMobile) {
+  if (!canRotateVertical) {
     return { text: horizontal, orientation: 'horizontal' }
   }
 

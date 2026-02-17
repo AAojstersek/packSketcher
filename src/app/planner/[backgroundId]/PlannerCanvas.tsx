@@ -221,8 +221,8 @@ export function PlannerCanvas({
   const HANDLE_SIZE_COARSE = 12
   const HANDLE_TOUCH_HIT_SLOP = 8
   const MIN_ITEM_SIZE = 40
-  const MOBILE_LABEL_TRUNCATE_THRESHOLD = 8
-  const MOBILE_VERTICAL_LABEL_MIN_LANE_WIDTH = 24
+  const LABEL_TRUNCATE_THRESHOLD = 8
+  const VERTICAL_LABEL_MIN_LANE_WIDTH = 24
 
   useEffect(() => {
     dragItemIdRef.current = dragItemId
@@ -493,7 +493,7 @@ export function PlannerCanvas({
         ctx.lineWidth = isSelected ? 3 : isHovered ? 2.25 : 1.5
         ctx.strokeRect(itemX, itemY, itemWidth, itemHeight)
 
-        // Box label in top-left; on mobile, rotate vertically when horizontal label is too truncated.
+        // Box label in top-left; rotate vertically when horizontal label is hidden or heavily truncated.
         const labelPaddingX = 6
         const labelPaddingY = 4
         const labelFontSize = 12
@@ -501,7 +501,7 @@ export function PlannerCanvas({
         const maxLabelWidth = itemWidth - labelPaddingX * 2
         const maxLabelHeight = itemHeight - labelPaddingY * 2
         const verticalMaxLabelRun =
-          itemWidth >= MOBILE_VERTICAL_LABEL_MIN_LANE_WIDTH ? itemHeight - labelPaddingY * 2 - 4 : 0
+          itemWidth >= VERTICAL_LABEL_MIN_LANE_WIDTH ? itemHeight - labelPaddingY * 2 - 4 : 0
         if (maxLabelWidth > 0 && maxLabelHeight > 0) {
           ctx.font = `600 ${labelFontSize}px ui-sans-serif, system-ui, sans-serif`
           ctx.textBaseline = 'top'
@@ -510,9 +510,9 @@ export function PlannerCanvas({
             horizontalMaxWidth: maxLabelWidth,
             verticalMaxRun: verticalMaxLabelRun,
             measureText: (value) => ctx.measureText(value).width,
-            isMobile: isCoarsePointer,
+            canRotateVertical: true,
             options: {
-              aggressiveTruncateThreshold: MOBILE_LABEL_TRUNCATE_THRESHOLD,
+              aggressiveTruncateThreshold: LABEL_TRUNCATE_THRESHOLD,
             },
           })
           if (labelLayout) {
